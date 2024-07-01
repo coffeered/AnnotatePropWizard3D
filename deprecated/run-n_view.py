@@ -12,7 +12,7 @@ from segment_anything import sam_model_registry
 from segment_anything.predictor_sammed import SammedPredictor
 from utils.checkpoint import download_ckpt
 from utils.constant import MIN_MASK_AREA
-from utils.image_process import get_side_pred, norm_slce, rotate_
+from utils.image_process import get_side_pred, norm_slce, rotate
 
 
 def predict_case(predictor, folder: str, degree: int = 30, offset: int = 0):
@@ -49,7 +49,7 @@ def predict_case(predictor, folder: str, degree: int = 30, offset: int = 0):
             rot_img = rotate(rot_img, degree)
             rot_pred = rotate(rot_pred, degree)
             rot_mask = rotate(rot_mask, degree)
-            rot_point = rotate_(
+            rot_point = rotate(
                 [rot_img.shape[1] // 2, rot_img.shape[2] // 2],
                 rot_point,
                 -degree * np.pi / 180,

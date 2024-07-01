@@ -1,7 +1,10 @@
 import math
 
+import numpy as np
 import torch
 from torchvision.transforms.functional import InterpolationMode, rotate
+
+__all__ = ["norm_slce", "norm_volume", "get_side_pred", "rotate"]
 
 
 def norm_slce(slce):
@@ -15,8 +18,14 @@ def norm_slce(slce):
     return slce
 
 
-def get_side_pred(predictor, pred, img, gt, rot_point, centroid, offset):
+def norm_volume(img):
+    img -= img.min()
+    img /= img.max()
+    img *= 255
+    return img
 
+
+def get_side_pred(predictor, pred, img, gt, rot_point, centroid, offset):
     slce = norm_slce(rot_img[:, int(rot_point[1])])
 
     predictor.set_image(slce)
@@ -25,7 +34,6 @@ def get_side_pred(predictor, pred, img, gt, rot_point, centroid, offset):
 
     proj = torch.nonzero(gt[centroid[0], int(rot_point[1])])
     if proj.shape[0] > 0:
-
         proj_min, proj_max = proj.min().cpu().numpy(), proj.max().cpu().numpy()
         input_point += [[proj_min + 5, centroid[0]], [proj_max - 5, centroid[0]]]
         input_label += [1, 1]
@@ -50,7 +58,7 @@ def get_side_pred(predictor, pred, img, gt, rot_point, centroid, offset):
     return pred
 
 
-def rotate_(origin, point, angle):
+def rotate(origin, point, angle):
     """
     Rotate a point counterclockwise by a given angle around a given origin.
 
