@@ -7,7 +7,7 @@ weights: weights/cutie-base-mega.pth
 max_internal_size: -1
 flip_aug: false
 # json_directory: null
-# size: 480
+size: 480
 # save_all: true
 # use_all_masks: false
 use_long_term: false

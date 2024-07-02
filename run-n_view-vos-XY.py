@@ -2,21 +2,28 @@ import os
 
 import click
 import torch
+from skimage.measure import label, regionprops
 
 from cutie.inference.inference_core import InferenceCore
 from cutie.inference.utils.args_utils import get_dataset_cfg
 from cutie.model.cutie import CUTIE
 from utils.checkpoint import download_ckpt
+from utils.image_process import (
+    cubic_interpolation,
+    normalize_volume,
+    rescale_centroid,
+    determine_degree,
+    rotate_predict,
+)
 from utils.yaml_loader import yaml_to_dotdict
-from utils.image_process import norm_volume
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MAX_LENGTH = 512
 
 
-def predict_case(folder):
-    case_dices, case_dicesb, case_dicesc = list(), list(), list()
-    case_mms, case_mmms = list(), list()
+def predict_case(folder, processor):
+    case_tps, case_fns, case_fps = list(), list(), list()
+    case_dices, case_size_zs = list(), list()
 
     try:
         img = sitk.ReadImage(os.path.join(folder, "axc.nii.gz"))
@@ -25,26 +32,72 @@ def predict_case(folder):
         mask = sitk.ReadImage(os.path.join(folder, "seg.nii.gz"))
         mask = sitk.GetArrayFromImage(mask)
     except:
-        return case_dices, case_dicesb, case_dicesc, case_mms, case_mmms
+        return case_tps, case_fns, case_fps, case_dices, case_size_zs
 
-    img = norm_volume(img)
+    img = normalize_volume(img.astype(float))
     mask = label(mask)
+    size_z, size_y, size_x = img.shape
+
+    tensor_img = cubic_interpolation(
+        input_tensor=torch.tensor(img, device=DEVICE), size=MAX_LENGTH
+    )
+    tensor_mask = cubic_interpolation(
+        input_tensor=torch.tensor(mask, device=DEVICE), size=MAX_LENGTH
+    )
+    tensor_img = tensor_img.permute(1, 0, 2).contiguous()  # [z, y, x] -> [y, z, x]
+    tensor_mask = tensor_mask.permute(1, 0, 2).contiguous()  # [z, y, x] -> [y, z, x]
 
     for i, prop in enumerate(regionprops(mask)):
         if prop.area == 0:
             continue
-        centroid = np.array(prop.centroid, dtype=np.float32)
-        tensor_img = torch.tensor(img, dtype=torch.float32, device=DEVICE)
-        tensor_mask = torch.tensor(mask, dtype=torch.float32, device=DEVICE)
 
-        tensor_img = F.interpolate(
-            tensor_img.unsqueeze(0).unsqueeze(0),
-            [MAX_LENGTH, MAX_LENGTH, MAX_LENGTH],
-        )[0][0]
-        tensor_mask = F.interpolate(
-            tensor_mask.unsqueeze(0).unsqueeze(0),
-            [MAX_LENGTH, MAX_LENGTH, MAX_LENGTH],
-        )[0][0]
+        centroid = rescale_centroid(
+            prop.centroid,
+            size_z=size_z,
+            size_y=size_y,
+            size_x=size_x,
+            max_length=MAX_LENGTH,
+        )
+        centroid = centroid[[1, 0, 2]]  # [z, y, x] -> [y, z, x]
+
+        rot_dict = {
+            "img": tensor_img,
+            "mask": tensor_mask,
+            "point": centroid[[2, 1]],  # take (x, z)
+            "prop_index": i,
+            "prop": prop,
+        }
+        rot_dict["pred"] = torch.zeros_like(rot_dict["img"], device=DEVICE).float()
+
+        degree = determine_degree(size_x=size_x, size_y=size_y, size_z=size_z)
+        offset = 0
+        while offset <= 90:
+            rot_dict, offset = rotate_predict(
+                rot_dict, offset, degree, processor, device=DEVICE
+            )
+        rot_dict = reset_rotate(rot_dict)
+        rot_dict["pred"] = rot_dict["pred"].permute(1, 0, 2).contiguous()
+
+        centroid = centroid[[1, 0, 2]]  # [y, z, x] -> [z, y, x]
+
+        rot_dict["pred"] = cubic_interpolation(
+            rot_dict["pred"], size=(size_z, size_y, size_x)
+        )
+        z_pred = torch.tensor((rot_dict["pred"].sum((1, 2)) > 0).int(), device=DEVICE)
+        z_gt = torch.tensor((mask.sum((1, 2)) > 0).int(), device=DEVICE)
+
+        # Calculate true positives, false positives, false negatives and dice score
+        tp = (z_pred * z_gt).sum().item()
+        fp = ((z_gt == 0) * z_pred).sum().item()
+        fn = ((z_pred == 0) * z_gt).sum().item()
+        dice = 2 * tp / (2 * tp + fp + fn)
+
+        case_tps.append(tp)
+        case_fps.append(fp)
+        case_fns.append(fn)
+        case_dices.append(dice)
+        case_size_zs.append(size_z)
+    return case_tps, case_fns, case_fps, case_dices, case_size_zs
 
 
 @click.command()
@@ -69,11 +122,26 @@ def run(dataset: str):
 
     cases_folders = glob(os.path.join(dataset, "*"))
 
-    dices, dicesb, dicesc = list(), list(), list()
-    mms, mmms = list(), list()
+    tps, fps, fns = list(), list(), list()
+    dices, size_zs = list(), list()
 
     for case_folder in cases_folders:
-        predict_case(folder=case_folder)
+        case_tps, case_fns, case_fps, case_dices, case_size_zs = predict_case(
+            folder=case_folder, processor=processor
+        )
+        tps.extend(case_tps)
+        fps.extend(case_fps)
+        fns.extend(case_fns)
+        dices.extend(case_dices)
+        size_zs.extend(case_size_zs)
+
+    result_folder = "results"
+    os.makedirs(result_folder, exist_ok=True)
+    np.save(os.path.join(result_folder, "tps.npy"), tps)
+    np.save(os.path.join(result_folder, "fps.npy"), fps)
+    np.save(os.path.join(result_folder, "fns.npy"), fns)
+    np.save(os.path.join(result_folder, "z_dices.npy"), dices)
+    np.save(os.path.join(result_folder, "zs.npy"), size_zs)
 
 
 if __name__ == "__main__":

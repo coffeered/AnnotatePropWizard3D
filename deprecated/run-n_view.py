@@ -12,7 +12,52 @@ from segment_anything import sam_model_registry
 from segment_anything.predictor_sammed import SammedPredictor
 from utils.checkpoint import download_ckpt
 from utils.constant import MIN_MASK_AREA
-from utils.image_process import get_side_pred, norm_slce, rotate
+from utils.image_process import rotate_point
+from torchvision.transforms.functional import rotate
+
+
+def norm_slce(slce):
+    if torch.is_tensor(slce):
+        slce = slce.cpu().numpy()
+    slce -= slce.min()
+    slce /= slce.max()
+    slce *= 255
+    slce = slce.astype(np.uint8)
+    slce = np.stack([slce, slce, slce], axis=2)
+    return slce
+
+
+def get_side_pred(predictor, pred, img, gt, rot_point, centroid, offset):
+    slce = norm_slice(rot_img[:, int(rot_point[1])])
+
+    predictor.set_image(slce)
+    input_point = [[int(rot_point[0]), centroid[0]]]
+    input_label = [1]
+
+    proj = torch.nonzero(gt[centroid[0], int(rot_point[1])])
+    if proj.shape[0] > 0:
+        proj_min, proj_max = proj.min().cpu().numpy(), proj.max().cpu().numpy()
+        input_point += [[proj_min + 5, centroid[0]], [proj_max - 5, centroid[0]]]
+        input_label += [1, 1]
+
+    input_point = np.array(input_point)
+    input_label = np.array(input_label)
+
+    masks, scores, logits = predictor.predict(
+        point_coords=input_point,
+        point_labels=input_label,
+        multimask_output=True,
+    )
+
+    # visualize(slce, masks[0], gt[:, int(rot_point[1])].cpu().numpy(), input_point, input_label, f"{offset}.png")
+
+    z = int(rot_point[1])
+
+    pred[:, [z - 1, z, z + 1]] = (
+        torch.tensor(masks[0]).unsqueeze(1).repeat(1, 3, 1).cuda()
+    )
+
+    return pred
 
 
 def predict_case(predictor, folder: str, degree: int = 30, offset: int = 0):
@@ -40,7 +85,7 @@ def predict_case(predictor, folder: str, degree: int = 30, offset: int = 0):
         rot_pred = torch.zeros_like(rot_img).float().cuda()
         rot_point = centroid[[2, 1]].astype(float)
 
-        slce = norm_slce(rot_img[:, int(rot_point[1])])
+        slce = norm_slice(rot_img[:, int(rot_point[1])])
         rot_pred = get_side_pred(
             predictor, rot_pred, slce, rot_mask, rot_point, centroid, offset
         )
@@ -49,7 +94,7 @@ def predict_case(predictor, folder: str, degree: int = 30, offset: int = 0):
             rot_img = rotate(rot_img, degree)
             rot_pred = rotate(rot_pred, degree)
             rot_mask = rotate(rot_mask, degree)
-            rot_point = rotate(
+            rot_point = rotate_point(
                 [rot_img.shape[1] // 2, rot_img.shape[2] // 2],
                 rot_point,
                 -degree * np.pi / 180,
@@ -88,7 +133,7 @@ def predict_case(predictor, folder: str, degree: int = 30, offset: int = 0):
                 [y - h / 2 * pad, x - w / 2 * pad, y + h / 2 * pad, x + w / 2 * pad]
             )
 
-            predictor.set_image(norm_slce(slce))
+            predictor.set_image(norm_slice(slce))
             masks, scores, logits = predictor.predict(
                 box=box,
                 multimask_output=False,
