@@ -1,6 +1,7 @@
 import os
-import gdown
 from typing import Dict
+
+import gdown
 import requests
 from tqdm.auto import tqdm
 
@@ -18,17 +19,17 @@ CKPT_INFO_HUBS: Dict[str, Dict[str, str]] = {
 }
 
 
-def download_ckpt(ckpt_name: str, root: str = "weights") -> None:
+def download_ckpt(ckpt_path: str) -> None:
     """
     Download a checkpoint file.
 
     Args:
-        ckpt_name (str): The name of the checkpoint file.
-        root (str): The root directory where the checkpoint file will be saved.
+        ckpt_path (str): The path of the checkpoint file.
 
     Returns:
         None
     """
+    root, ckpt_name = os.path.split(ckpt_path)
     os.makedirs(root, exist_ok=True)
     output_file = os.path.join(root, ckpt_name)
     ckpt_info = CKPT_INFO_HUBS[ckpt_name]

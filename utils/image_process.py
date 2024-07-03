@@ -6,8 +6,6 @@ import torch.nn.functional as F
 from torchvision.transforms.functional import InterpolationMode, rotate
 from gui.interactive_utils import (
     image_to_torch,
-    index_numpy_to_one_hot_torch,
-    overlay_davis,
     torch_prob_to_numpy_mask,
 )
 
@@ -71,30 +69,34 @@ def get_side_pred(
 ):
     TRACE_NUM = 4
     # Transform ground truth, no background
-    gt_transformed = torch.where(gt == (i + 1), 1, 0)
+    gt_transformed = torch.where(gt == (i + 1), 1, 0).float()
 
     target_rotation = int(rot_point[1])  # which is centroid z
     the_slice = normalize_slice(img[:, target_rotation])
-    gt_slice = gt[:, target_rotation].clone()  # [cubix_size, cubix_size]
+    gt_slice = gt_transformed[:, target_rotation].clone()  # [cubix_size, cubix_size]
 
     # Convert slice to torch tensor and interpolate
     frame_torch = image_to_torch(the_slice, device=device)
     frame_torch = F.interpolate(frame_torch.unsqueeze(0), (size, size)).squeeze(0)
 
     # Interpolate ground truth slice
-    mask_torch = cubic_interpolation(gt_slice, size=size)
+    mask_torch = (
+        F.interpolate(gt_slice.unsqueeze(0).unsqueeze(0), (size, size))
+        .squeeze(0)
+        .squeeze(0)
+    )
     with torch.inference_mode():
         if offset == 0:
             init_mask_torch = torch.zeros(TRACE_NUM, size, size).to(device)
             init_mask_torch[0] = mask_torch
 
             processor.clear_memory()
-            mask, _ = processor.step(frame_torch, init_mask_torch, idx_mask=False)
+            mask = processor.step(frame_torch, init_mask_torch, idx_mask=False)
 
         else:
-            mask, _ = processor.step(frame_torch)
+            mask = processor.step(frame_torch)
 
-    mask = F.interpolate(mask.unsqueeze(0), *(gt_slice.shape)).squeeze()
+    mask = F.interpolate(mask.unsqueeze(0), gt_slice.size()).squeeze()
     mask = torch_prob_to_numpy_mask(mask)
 
     if mask.sum() == 0:
@@ -137,7 +139,8 @@ def cubic_interpolation(input_tensor, size, mode="trilinear", dtype=torch.float3
 
     Args:
         input_tensor (torch.Tensor): The input tensor with shape (z, x, y).
-        size (int): The target size for all dimensions (will result in a tensor of shape (size, size, size)).
+        size (int): The target size for all dimensions
+                    (will result in a tensor of shape (size, size, size)).
         dtype (torch.dtype): The desired data type for the output tensor. Default is torch.float32.
 
     Returns:
@@ -246,3 +249,14 @@ def rotate_predict(rot_dict, offset, degree, processor, device):
     offset += degree
 
     return rot_dict, offset
+
+
+def reset_rotate(rot_dict, centroid, offset):
+    rot_dict["point"] = centroid[[2, 1]].astype(float)
+    rot_dict["img"] = rotate(
+        rot_dict["img"], -offset, interpolation=InterpolationMode.BILINEAR
+    )
+    rot_dict["pred"] = rotate(rot_dict["pred"], -offset)
+    rot_dict["mask"] = rotate(rot_dict["mask"], -offset)
+
+    return rot_dict

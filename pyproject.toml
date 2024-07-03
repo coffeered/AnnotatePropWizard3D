@@ -35,6 +35,10 @@ black = "^24.4.2"
 isort = "^5.13.2"
 ipython = "^8.24.0"
 ipykernel = "^6.29.4"
+flake8 = "^7.1.0"
+flake8-pyproject = "^1.2.3"
+pre-commit = "^3.7.1"
+pytest = "^8.2.2"
 
 [build-system]
 requires = ["poetry-core"]
@@ -54,3 +58,13 @@ exclude = '''
 profile = "black"
 line_length = 88
 skip = ["SAM-Med2D", "segment_anything", ".venv"]
+
+[tool.flake8]
+count = true
+max-line-length = 100
+statistics = true
+exclude = [".git", ".venv", ".vscode", "submodules", "deprecated"]
+
+[tool.pytest.ini_options]
+addopts = "-vv"
+testpaths = "tests"

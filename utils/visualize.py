@@ -1,7 +1,8 @@
-import matplotlib.pyplot as plt
-from skimage import morphology
 import os
 
+import matplotlib.pyplot as plt
+import numpy as np
+from skimage import morphology
 
 __all__ = [
     "visualize",

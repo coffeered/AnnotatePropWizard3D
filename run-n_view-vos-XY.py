@@ -1,18 +1,23 @@
 import os
+from glob import glob
 
 import click
+import numpy as np
+import SimpleITK as sitk
 import torch
+import torch.nn.functional as F
 from skimage.measure import label, regionprops
+from tqdm.auto import tqdm
 
 from cutie.inference.inference_core import InferenceCore
-from cutie.inference.utils.args_utils import get_dataset_cfg
 from cutie.model.cutie import CUTIE
 from utils.checkpoint import download_ckpt
 from utils.image_process import (
     cubic_interpolation,
+    determine_degree,
     normalize_volume,
     rescale_centroid,
-    determine_degree,
+    reset_rotate,
     rotate_predict,
 )
 from utils.yaml_loader import yaml_to_dotdict
@@ -25,18 +30,20 @@ def predict_case(folder, processor):
     case_tps, case_fns, case_fps = list(), list(), list()
     case_dices, case_size_zs = list(), list()
 
+    print(folder)
     try:
         img = sitk.ReadImage(os.path.join(folder, "axc.nii.gz"))
         img = sitk.GetArrayFromImage(img)
 
         mask = sitk.ReadImage(os.path.join(folder, "seg.nii.gz"))
         mask = sitk.GetArrayFromImage(mask)
-    except:
+    except ValueError:
         return case_tps, case_fns, case_fps, case_dices, case_size_zs
 
     img = normalize_volume(img.astype(float))
     mask = label(mask)
     size_z, size_y, size_x = img.shape
+    # print(folder, img.shape)
 
     tensor_img = cubic_interpolation(
         input_tensor=torch.tensor(img, device=DEVICE), size=MAX_LENGTH
@@ -75,16 +82,24 @@ def predict_case(folder, processor):
             rot_dict, offset = rotate_predict(
                 rot_dict, offset, degree, processor, device=DEVICE
             )
-        rot_dict = reset_rotate(rot_dict)
+        rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
         rot_dict["pred"] = rot_dict["pred"].permute(1, 0, 2).contiguous()
 
         centroid = centroid[[1, 0, 2]]  # [y, z, x] -> [z, y, x]
 
-        rot_dict["pred"] = cubic_interpolation(
-            rot_dict["pred"], size=(size_z, size_y, size_x)
+        rot_dict["pred"] = (
+            F.interpolate(
+                rot_dict["pred"].unsqueeze(0).unsqueeze(0),
+                (size_z, size_y, size_x),
+                mode="trilinear",
+            )
+            .squeeze(0)
+            .squeeze(0)
         )
-        z_pred = torch.tensor((rot_dict["pred"].sum((1, 2)) > 0).int(), device=DEVICE)
-        z_gt = torch.tensor((mask.sum((1, 2)) > 0).int(), device=DEVICE)
+        z_pred = torch.tensor(
+            (rot_dict["pred"].sum((1, 2)) > 0).clone().detach().int(), device=DEVICE
+        )
+        z_gt = torch.tensor((mask.sum((1, 2)) > 0), device=DEVICE, dtype=int)
 
         # Calculate true positives, false positives, false negatives and dice score
         tp = (z_pred * z_gt).sum().item()
@@ -115,7 +130,9 @@ def run(dataset: str):
         # Load the network weights
         cutie = CUTIE(config).cuda().eval()
         if not os.path.isfile(config.weights):
-            download_ckpt(os.path.basename(model_weights))
+            download_ckpt(
+                ckpt_path=config.weights,
+            )
         model_weights = torch.load(config.weights)
         cutie.load_weights(model_weights)
     processor = InferenceCore(cutie, cfg=config)
@@ -125,7 +142,7 @@ def run(dataset: str):
     tps, fps, fns = list(), list(), list()
     dices, size_zs = list(), list()
 
-    for case_folder in cases_folders:
+    for case_folder in tqdm(cases_folders):
         case_tps, case_fns, case_fps, case_dices, case_size_zs = predict_case(
             folder=case_folder, processor=processor
         )
