@@ -30,7 +30,6 @@ def predict_case(folder, processor):
     case_tps, case_fns, case_fps = list(), list(), list()
     case_dices, case_size_zs = list(), list()
 
-    print(folder)
     try:
         img = sitk.ReadImage(os.path.join(folder, "axc.nii.gz"))
         img = sitk.GetArrayFromImage(img)
@@ -96,9 +95,7 @@ def predict_case(folder, processor):
             .squeeze(0)
             .squeeze(0)
         )
-        z_pred = torch.tensor(
-            (rot_dict["pred"].sum((1, 2)) > 0).clone().detach().int(), device=DEVICE
-        )
+        z_pred = (rot_dict["pred"].sum((1, 2)) > 0).int().to(DEVICE)
         z_gt = torch.tensor((mask.sum((1, 2)) > 0), device=DEVICE, dtype=int)
 
         # Calculate true positives, false positives, false negatives and dice score
