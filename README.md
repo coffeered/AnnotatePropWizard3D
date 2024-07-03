@@ -21,7 +21,7 @@ To get started with 3DAnnotatePropWizard, follow these steps:
 
     [TBD]
     ```sh
-    poetry install
+    poetry install --with dev -E cutie --sync
     ```
 
 ## Usage
