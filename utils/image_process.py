@@ -152,9 +152,11 @@ def cubic_interpolation(input_tensor, size, mode="trilinear", dtype=torch.float3
     # Add batch and channel dimensions
     input_tensor = input_tensor.unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, z, y, x)
 
+    align_corners = None if mode == "nearest" else True
+
     # Perform interpolation
     output_tensor = F.interpolate(
-        input_tensor, size=(size, size, size), mode=mode, align_corners=True
+        input_tensor, size=(size, size, size), mode=mode, align_corners=align_corners
     )
 
     # Remove batch and channel dimensions

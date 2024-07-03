@@ -36,7 +36,7 @@ def predict_case(folder, processor):
 
         mask = sitk.ReadImage(os.path.join(folder, "seg.nii.gz"))
         mask = sitk.GetArrayFromImage(mask)
-    except ValueError:
+    except Exception:
         return case_tps, case_fns, case_fps, case_dices, case_size_zs
 
     img = normalize_volume(img.astype(float))
@@ -45,10 +45,10 @@ def predict_case(folder, processor):
     # print(folder, img.shape)
 
     tensor_img = cubic_interpolation(
-        input_tensor=torch.tensor(img, device=DEVICE), size=MAX_LENGTH
+        input_tensor=torch.tensor(img, device=DEVICE), size=MAX_LENGTH, mode="nearest"
     )
     tensor_mask = cubic_interpolation(
-        input_tensor=torch.tensor(mask, device=DEVICE), size=MAX_LENGTH
+        input_tensor=torch.tensor(mask, device=DEVICE), size=MAX_LENGTH, mode="nearest"
     )
     tensor_img = tensor_img.permute(1, 0, 2).contiguous()  # [z, y, x] -> [y, z, x]
     tensor_mask = tensor_mask.permute(1, 0, 2).contiguous()  # [z, y, x] -> [y, z, x]
@@ -75,13 +75,15 @@ def predict_case(folder, processor):
         }
         rot_dict["pred"] = torch.zeros_like(rot_dict["img"], device=DEVICE).float()
 
-        degree = determine_degree(size_x=size_x, size_y=size_y, size_z=size_z)
+        # degree = determine_degree(size_x=size_x, size_y=size_y, size_z=size_z)
+        degree = 2
         offset = 0
         while offset <= 90:
             rot_dict, offset = rotate_predict(
                 rot_dict, offset, degree, processor, device=DEVICE
             )
         rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
+
         rot_dict["pred"] = rot_dict["pred"].permute(1, 0, 2).contiguous()
 
         centroid = centroid[[1, 0, 2]]  # [y, z, x] -> [z, y, x]
@@ -116,7 +118,7 @@ def predict_case(folder, processor):
 @click.option(
     "--dataset",
     "-D",
-    default="/volume/open-dataset-ssd/ai99/gen_data/neuroma",
+    default="/volume/open-dataset-ssd/ai99/gen_data/meningioma",
     help="The medical dataset",
     type=click.Path(exists=True),
 )
