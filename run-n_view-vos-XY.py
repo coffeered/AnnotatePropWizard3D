@@ -30,12 +30,11 @@ def predict_case(folder, processor):
     case_dices, case_size_zs = list(), list()
 
     try:
-        img = sitk.ReadImage(os.path.join(folder, "axc.nii.gz"))
-        img = sitk.GetArrayFromImage(img)
-
-        mask = sitk.ReadImage(os.path.join(folder, "seg.nii.gz"))
-        mask = sitk.GetArrayFromImage(mask)
-    except Exception:
+        sitk_img = sitk.ReadImage(os.path.join(folder, "data.nii.gz"))
+        img = sitk.GetArrayFromImage(sitk_img)
+        sitk_mask = sitk.ReadImage(os.path.join(folder, "seg.nii.gz"))
+        mask = sitk.GetArrayFromImage(sitk_mask)
+    except RuntimeError:
         return case_tps, case_fns, case_fps, case_dices, case_size_zs
 
     img = normalize_volume(img.astype(float))
@@ -43,12 +42,12 @@ def predict_case(folder, processor):
     size_z, size_y, size_x = img.shape
 
     tensor_img = interpolate_tensor(
-        input_tensor=torch.tensor(img, device=DEVICE),
+        input_tensor=torch.tensor(img, dtype=float, device=DEVICE),
         size=(MAX_LENGTH, MAX_LENGTH, MAX_LENGTH),
         mode="nearest",
     )
     tensor_mask = interpolate_tensor(
-        input_tensor=torch.tensor(mask, device=DEVICE),
+        input_tensor=torch.tensor(mask, dtype=float, device=DEVICE),
         size=(MAX_LENGTH, MAX_LENGTH, MAX_LENGTH),
         mode="nearest",
     )
