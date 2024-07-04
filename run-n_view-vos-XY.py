@@ -5,7 +5,6 @@ import click
 import numpy as np
 import SimpleITK as sitk
 import torch
-import torch.nn.functional as F
 from skimage.measure import label, regionprops
 from tqdm.auto import tqdm
 
@@ -13,8 +12,8 @@ from cutie.inference.inference_core import InferenceCore
 from cutie.model.cutie import CUTIE
 from utils.checkpoint import download_ckpt
 from utils.image_process import (
-    cubic_interpolation,
     determine_degree,
+    interpolate_tensor,
     normalize_volume,
     rescale_centroid,
     reset_rotate,
@@ -42,13 +41,16 @@ def predict_case(folder, processor):
     img = normalize_volume(img.astype(float))
     mask = label(mask)
     size_z, size_y, size_x = img.shape
-    # print(folder, img.shape)
 
-    tensor_img = cubic_interpolation(
-        input_tensor=torch.tensor(img, device=DEVICE), size=MAX_LENGTH, mode="nearest"
+    tensor_img = interpolate_tensor(
+        input_tensor=torch.tensor(img, device=DEVICE),
+        size=(MAX_LENGTH, MAX_LENGTH, MAX_LENGTH),
+        mode="nearest",
     )
-    tensor_mask = cubic_interpolation(
-        input_tensor=torch.tensor(mask, device=DEVICE), size=MAX_LENGTH, mode="nearest"
+    tensor_mask = interpolate_tensor(
+        input_tensor=torch.tensor(mask, device=DEVICE),
+        size=(MAX_LENGTH, MAX_LENGTH, MAX_LENGTH),
+        mode="nearest",
     )
     tensor_img = tensor_img.permute(1, 0, 2).contiguous()  # [z, y, x] -> [y, z, x]
     tensor_mask = tensor_mask.permute(1, 0, 2).contiguous()  # [z, y, x] -> [y, z, x]
@@ -75,8 +77,7 @@ def predict_case(folder, processor):
         }
         rot_dict["pred"] = torch.zeros_like(rot_dict["img"], device=DEVICE).float()
 
-        # degree = determine_degree(size_x=size_x, size_y=size_y, size_z=size_z)
-        degree = 2
+        degree = determine_degree(size_x=size_x, size_y=size_y, size_z=size_z)
         offset = 0
         while offset <= 90:
             rot_dict, offset = rotate_predict(
@@ -88,14 +89,10 @@ def predict_case(folder, processor):
 
         centroid = centroid[[1, 0, 2]]  # [y, z, x] -> [z, y, x]
 
-        rot_dict["pred"] = (
-            F.interpolate(
-                rot_dict["pred"].unsqueeze(0).unsqueeze(0),
-                (size_z, size_y, size_x),
-                mode="trilinear",
-            )
-            .squeeze(0)
-            .squeeze(0)
+        rot_dict["pred"] = interpolate_tensor(
+            input_tensor=rot_dict["pred"],
+            size=(size_z, size_y, size_x),
+            mode="trilinear",
         )
         z_pred = (rot_dict["pred"].sum((1, 2)) > 0).int().to(DEVICE)
         z_gt = torch.tensor((mask.sum((1, 2)) > 0), device=DEVICE, dtype=int)
@@ -127,7 +124,7 @@ def run(dataset: str):
         config = yaml_to_dotdict("yaml/eval_config.yaml")
 
         # Load the network weights
-        cutie = CUTIE(config).cuda().eval()
+        cutie = CUTIE(config).to(DEVICE).eval()
         if not os.path.isfile(config.weights):
             download_ckpt(
                 ckpt_path=config.weights,

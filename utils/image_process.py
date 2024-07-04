@@ -4,19 +4,16 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torchvision.transforms.functional import InterpolationMode, rotate
-from gui.interactive_utils import (
-    image_to_torch,
-    torch_prob_to_numpy_mask,
-)
+
+from gui.interactive_utils import image_to_torch, torch_prob_to_numpy_mask
 
 __all__ = [
-    "cubic_interpolation",
-    "normalize_slice",
-    "normalize_volume",
-    "get_side_pred",
-    "rescale_centroid",
     "determine_degree",
+    "normalize_volume",
+    "rescale_centroid",
+    "reset_rotate",
     "rotate_predict",
+    "interpolate_tensor",
 ]
 
 
@@ -73,17 +70,19 @@ def get_side_pred(
 
     target_rotation = int(rot_point[1])  # which is centroid z
     the_slice = normalize_slice(img[:, target_rotation])
-    gt_slice = gt_transformed[:, target_rotation].clone()  # [cubix_size, cubix_size]
+    gt_slice = gt_transformed[:, target_rotation].clone()  # [cubic_size, cubic_size]
 
     # Convert slice to torch tensor and interpolate
-    frame_torch = image_to_torch(the_slice, device=device)
-    frame_torch = F.interpolate(frame_torch.unsqueeze(0), (size, size)).squeeze(0)
+    frame_torch = image_to_torch(the_slice, device=device)  # [3, x, y]
+    # frame_torch = F.interpolate(frame_torch.unsqueeze(0), (size, size)).squeeze(0)
+    frame_torch = interpolate_tensor(
+        input_tensor=frame_torch, size=size, mode="bilinear"
+    )  # [3, size, size]
 
-    # Interpolate ground truth slice
-    mask_torch = (
-        F.interpolate(gt_slice.unsqueeze(0).unsqueeze(0), (size, size))
-        .squeeze(0)
-        .squeeze(0)
+    mask_torch = interpolate_tensor(
+        input_tensor=gt_slice,
+        size=size,
+        mode="nearest",
     )
     with torch.inference_mode():
         if offset == 0:
@@ -91,12 +90,18 @@ def get_side_pred(
             init_mask_torch[0] = mask_torch
 
             processor.clear_memory()
-            mask = processor.step(frame_torch, init_mask_torch, idx_mask=False)
+            mask = processor.step(
+                frame_torch, init_mask_torch, idx_mask=False
+            )  # [1, TRACE_NUM, size, size]
 
         else:
-            mask = processor.step(frame_torch)
+            mask = processor.step(frame_torch)  # [1, TRACE_NUM, size, size]
 
-    mask = F.interpolate(mask.unsqueeze(0), gt_slice.size()).squeeze()
+    mask = interpolate_tensor(
+        input_tensor=mask,
+        size=gt_slice.size(),
+        mode="nearest",
+    )
     mask = torch_prob_to_numpy_mask(mask)
 
     if mask.sum() == 0:
@@ -133,34 +138,51 @@ def rotate_point(origin, point, angle):
     return qx, qy
 
 
-def cubic_interpolation(input_tensor, size, mode="trilinear", dtype=torch.float32):
+def interpolate_tensor(
+    input_tensor: torch.Tensor,
+    size,
+    mode: str = "trilinear",
+    align_corners: bool = True,
+) -> torch.Tensor:
     """
-    Perform cubic interpolation on a 3D tensor to resize it to the specified size.
+    Interpolates a tensor to a target size using a specified mode.
 
     Args:
-        input_tensor (torch.Tensor): The input tensor with shape (z, x, y).
-        size (int): The target size for all dimensions
-                    (will result in a tensor of shape (size, size, size)).
-        dtype (torch.dtype): The desired data type for the output tensor. Default is torch.float32.
+    input_tensor (torch.Tensor): The tensor to interpolate.
+    size (tuple or int): Target size. For "trilinear" and "bilinear",
+                         should be a tuple of three and two integers respectively.
+    mode (str): Interpolation mode: "trilinear", "bilinear", or "nearest".
+                Default is "trilinear".
+    align_corners (bool): Align corners. Default is True. Ignored for "nearest".
 
     Returns:
-        torch.Tensor: The resized tensor with shape (size, size, size).
+    torch.Tensor: The interpolated tensor.
     """
-    # Ensure the input tensor is in the correct dtype
-    input_tensor = input_tensor.to(dtype)
+    # Determine the number of dimensions to unsqueeze based on the tensor shape
+    match mode:
+        case "trilinear":
+            num_unsqueezes = 5 - input_tensor.dim()
+        case "nearest" | "bilinear":
+            if isinstance(size, int) or len(size) != 3:
+                num_unsqueezes = 4 - input_tensor.dim()
+            else:
+                num_unsqueezes = 5 - input_tensor.dim()
+            if mode == "nearest":
+                align_corners = None
+        case _:
+            raise ValueError(f"Invalid mode: {mode}")
 
-    # Add batch and channel dimensions
-    input_tensor = input_tensor.unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, z, y, x)
+    for _ in range(num_unsqueezes):
+        input_tensor = input_tensor.unsqueeze(0)
 
-    align_corners = None if mode == "nearest" else True
-
-    # Perform interpolation
+    # Interpolate the tensor
     output_tensor = F.interpolate(
-        input_tensor, size=(size, size, size), mode=mode, align_corners=align_corners
+        input_tensor, size=size, mode=mode, align_corners=align_corners
     )
 
-    # Remove batch and channel dimensions
-    output_tensor = output_tensor.squeeze(0).squeeze(0)  # Shape: (size, size, size)
+    # Squeeze the tensor back to the original number of dimensions
+    for _ in range(num_unsqueezes):
+        output_tensor = output_tensor.squeeze(0)
 
     return output_tensor
 
