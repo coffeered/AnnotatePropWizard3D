@@ -25,7 +25,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MAX_LENGTH = 512
 
 
-def predict_case(folder, processor):
+def predict_case(folder, vos_processor):
     case_tps, case_fns, case_fps = list(), list(), list()
     case_dices, case_size_zs = list(), list()
 
@@ -80,7 +80,7 @@ def predict_case(folder, processor):
         offset = 0
         while offset <= 90:
             rot_dict, offset = rotate_predict(
-                rot_dict, offset, degree, processor, device=DEVICE
+                rot_dict, offset, degree, vos_processor, device=DEVICE
             )
         rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
 
@@ -130,16 +130,15 @@ def run(dataset: str):
             )
         model_weights = torch.load(config.weights)
         cutie.load_weights(model_weights)
-    processor = InferenceCore(cutie, cfg=config)
-
-    cases_folders = glob(os.path.join(dataset, "*"))
+    vos_processor = InferenceCore(cutie, cfg=config)
 
     tps, fps, fns = list(), list(), list()
     dices, size_zs = list(), list()
 
+    cases_folders = glob(os.path.join(dataset, "*"))
     for case_folder in tqdm(cases_folders):
         case_tps, case_fns, case_fps, case_dices, case_size_zs = predict_case(
-            folder=case_folder, processor=processor
+            folder=case_folder, vos_processor=vos_processor
         )
         tps.extend(case_tps)
         fps.extend(case_fps)

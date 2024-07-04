@@ -12,6 +12,10 @@ CKPT_INFO_HUBS: Dict[str, Dict[str, str]] = {
         "mode": "gdrive",
         "url": "https://drive.google.com/uc?id=1ARiB5RkSsWmAB_8mqWnwDF8ZKTtFwsjl",
     },
+    "sam_vit_b_01ec64.pth": {
+        "mode": "huggingface",
+        "url": "https://huggingface.co/segments-arnaud/sam_vit_b/resolve/main/sam_vit_b_01ec64.pth?download=true",
+    },
     "cutie-base-mega.pth": {
         "mode": "github",
         "url": "https://github.com/hkchengrex/Cutie/releases/download/v1.0/cutie-base-mega.pth",
@@ -37,7 +41,7 @@ def download_ckpt(ckpt_path: str) -> None:
     match ckpt_info["mode"]:
         case "gdrive":
             gdown.download(ckpt_info["url"], output_file, quiet=False)
-        case "github":
+        case "github" | "huggingface":
             r = requests.get(ckpt_info["url"], stream=True)
             total_size = int(r.headers.get("content-length", 0))
             BLOCK_SIZE = 1024

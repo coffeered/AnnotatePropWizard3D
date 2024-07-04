@@ -1,4 +1,5 @@
 import math
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -42,6 +43,24 @@ def normalize_slice(slice_tensor, dtype=np.uint8):
     slice_tensor = np.stack([slice_tensor] * 3, axis=2)
 
     return slice_tensor
+
+
+def get_slice(img_array, mask_array, idx):
+    """
+    Get a specific slice from the input image and mask arrays.
+
+    Args:
+        img_array (np.ndarray): Input image array.
+        mask_array (np.ndarray): Input mask array.
+        idx (int): Index of the slice to retrieve.
+
+    Returns:
+        tuple: A tuple containing the normalized slice data and the corresponding mask data.
+    """
+    slice_data = np.stack([img_array[idx]] * 3, axis=2)
+    mask_data = mask_array[idx]
+
+    return slice_data, mask_data
 
 
 def normalize_volume(img):
@@ -284,3 +303,82 @@ def reset_rotate(rot_dict, centroid, offset):
     rot_dict["mask"] = rotate(rot_dict["mask"], -offset)
 
     return rot_dict
+
+
+def crop_and_pad(
+    input_tensor: torch.Tensor,
+    y_min: int,
+    y_max: int,
+    x_min: int,
+    x_max: int,
+    padding: Tuple[int, int, int, int],
+    device: torch.device,
+) -> np.ndarray:
+    """
+    Crop and pad a tensor.
+
+    Args:
+        input_tensor (torch.Tensor): The input tensor to be cropped and padded.
+        y_min (int): The minimum y-coordinate for cropping.
+        y_max (int): The maximum y-coordinate for cropping.
+        x_min (int): The minimum x-coordinate for cropping.
+        x_max (int): The maximum x-coordinate for cropping.
+        padding (Tuple[int, int, int, int]): A tuple of four integers (pad_left, pad_right, pad_top, pad_bottom) for padding.
+        device (torch.device): The device to move the tensor to.
+        dtype (torch.dtype, optional): The data type of the tensor (default is torch.float).
+
+    Returns:
+        np.ndarray: The cropped and padded tensor as a NumPy array.
+    """
+    crop = input_tensor[:, y_min:y_max, x_min:x_max].to(
+        dtype=torch.float, device=device
+    )
+    pad_left, pad_right, pad_top, pad_bottom = padding
+    padded = torch.nn.functional.pad(
+        crop, (pad_left, pad_right, pad_top, pad_bottom, 0, 0), mode="constant", value=0
+    )
+    return padded.cpu().numpy()
+
+
+def vos_step(processor, input_slice, size, device):
+    frame_torch = image_to_torch(input_slice, device=device)
+    frame_torch = F.interpolate(frame_torch.unsqueeze(0), (480, 480), mode="bilinear")
+    frame_torch = frame_torch[0]
+
+    with torch.inference_mode():
+        prediction, logits = processor.step(frame_torch, end=True)
+
+    prediction = torch_prob_to_numpy_mask(prediction)
+
+    # prediction = torch.tensor(prediction).float().unsqueeze(0).unsqueeze(0)
+    # prediction = F.interpolate(prediction, (gt.shape[0], gt.shape[1]))[0][0]
+    prediction = interpolate_tensor(prediction, size=size)
+
+    return frame_torch, prediction, logits
+
+
+def sam_step(
+    predictor, input_slice, logits, box, feature_size=256, multimask_output=False
+):
+    mask_logits = F.interpolate(
+        logits[:, [1]], (feature_size, feature_size), mode="bilinear"
+    )
+
+    predictor.set_image(input_slice.astype(float))
+    masks, scores, logits = predictor.predict(
+        box=box,
+        multimask_output=multimask_output,
+        mask_input=mask_logits[:, 0].cpu().numpy(),
+    )
+
+    return masks
+
+
+# def vos_reset(processor, frame_torch, masks, trace_num, model_size):
+#     mask_torch = torch.zeros(trace_num, 480, 480).cuda()
+#     masks = F.interpolate(torch.tensor(masks).cuda().unsqueeze(0), (480, 480))[0]
+#     mask_torch[0] = masks[0]
+
+#     with torch.inference_mode():
+#         processor.clear_memory()
+#         processor.step(frame_torch, mask_torch, idx_mask=False)
