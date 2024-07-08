@@ -372,13 +372,3 @@ def sam_step(
     )
 
     return masks
-
-
-# def vos_reset(processor, frame_torch, masks, trace_num, model_size):
-#     mask_torch = torch.zeros(trace_num, 480, 480).cuda()
-#     masks = F.interpolate(torch.tensor(masks).cuda().unsqueeze(0), (480, 480))[0]
-#     mask_torch[0] = masks[0]
-
-#     with torch.inference_mode():
-#         processor.clear_memory()
-#         processor.step(frame_torch, mask_torch, idx_mask=False)
