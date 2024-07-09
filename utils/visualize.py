@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from skimage import morphology
-from skimage.measure import regionprops
+from skimage.measure import label, regionprops
 from torchvision.transforms.functional import rotate
 
 from utils.image_process import interpolate_tensor, normalize_volume, rotate_point
@@ -109,6 +109,8 @@ def visualize_zaxis_rotation(
 ):
     img_volume = img_volume.astype(float)
     norm_volume = normalize_volume(img_volume)
+    labeled_mask_volume = label(mask_volume)
+
     spacing_zyx = np.array(spacing_yxz)[[2, 0, 1]]
     size_z, size_y, size_x = img_volume.shape
 
@@ -121,13 +123,13 @@ def visualize_zaxis_rotation(
     )
     tensor_mask = interpolate_tensor(
         input_tensor=torch.tensor(
-            mask_volume.astype(float), dtype=float, device=device
+            labeled_mask_volume.astype(float), dtype=float, device=device
         ),
         size=resample_size,
         mode="nearest",
     )
 
-    for i, prop in enumerate(regionprops(mask_volume)):
+    for i, prop in enumerate(regionprops(labeled_mask_volume)):
         resample_centroid = prop.centroid * np.array(
             [
                 resample_size[0] / size_z,

@@ -121,7 +121,7 @@ def predict_case(
             frame_torch, prediction, logits = vos_step(
                 processor=vos_processor,
                 input_slice=slice_data,
-                size=mask_data.size(),
+                size=mask_transformed.size(),
                 device=DEVICE,
             )
 
@@ -137,11 +137,11 @@ def predict_case(
             mask_torch[0] = masks[0]
             vos_processor.step(frame_torch, mask_torch, idx_mask=False)
 
-            current_tp = (mask_data * masks[0]).sum()
+            current_tp = (mask_transformed * masks[0]).sum()
             current_pred = masks[0].sum()
             tp_4_dice += current_tp
             pred_4_dice += current_pred
-            case_dice = 2 * current_tp / (mask_data.sum() + current_pred + 1e-8)
+            case_dice = 2 * current_tp / (mask_transformed.sum() + current_pred + 1e-8)
             case_dices.append(case_dice)
 
             index_z += 1
@@ -159,7 +159,7 @@ def predict_case(
             frame_torch, prediction, logits = vos_step(
                 processor=vos_processor,
                 input_slice=slice_data,
-                size=mask_data.size(),
+                size=mask_transformed.size(),
                 device=DEVICE,
             )
 
@@ -175,11 +175,11 @@ def predict_case(
             mask_torch[0] = masks[0]
             vos_processor.step(frame_torch, mask_torch, idx_mask=False)
 
-            current_tp = (mask_data * masks[0]).sum()
+            current_tp = (mask_transformed * masks[0]).sum()
             current_pred = masks[0].sum()
             tp_4_dice += current_tp
             pred_4_dice += current_pred
-            case_dice = 2 * current_tp / (mask_data.sum() + current_pred + 1e-8)
+            case_dice = 2 * current_tp / (mask_transformed.sum() + current_pred + 1e-8)
             case_dices.append(case_dice)
 
             index_z -= 1
