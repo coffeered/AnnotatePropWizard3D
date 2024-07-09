@@ -330,7 +330,7 @@ def crop_and_pad(
     Returns:
         np.ndarray: The cropped and padded tensor as a NumPy array.
     """
-    crop = input_tensor[:, y_min:y_max, x_min:x_max].to(
+    crop = torch.tensor(input_tensor[:, y_min:y_max, x_min:x_max]).to(
         dtype=torch.float, device=device
     )
     pad_left, pad_right, pad_top, pad_bottom = padding
@@ -340,9 +340,18 @@ def crop_and_pad(
     return padded.cpu().numpy()
 
 
-def vos_step(processor, input_slice, size, device):
+def pad_box(box, pad):
+    h, w = box[3] - box[1], box[2] - box[0]
+    y, x = (box[3] + box[1]) / 2, (box[2] + box[0]) / 2
+    box = np.array([y - h / 2 * pad, x - w / 2 * pad, y + h / 2 * pad, x + w / 2 * pad])
+    return box
+
+
+def vos_step(processor, input_slice, model_size, size, device):
     frame_torch = image_to_torch(input_slice, device=device)
-    frame_torch = F.interpolate(frame_torch.unsqueeze(0), (480, 480), mode="bilinear")
+    frame_torch = F.interpolate(
+        frame_torch.unsqueeze(0), (model_size, model_size), mode="bilinear"
+    )
     frame_torch = frame_torch[0]
 
     with torch.inference_mode():
@@ -350,10 +359,8 @@ def vos_step(processor, input_slice, size, device):
 
     prediction = torch_prob_to_numpy_mask(prediction)
 
-    # prediction = torch.tensor(prediction).float().unsqueeze(0).unsqueeze(0)
-    # prediction = F.interpolate(prediction, (gt.shape[0], gt.shape[1]))[0][0]
-    prediction = interpolate_tensor(prediction, size=size)
-
+    prediction = torch.tensor(prediction).float().unsqueeze(0).unsqueeze(0)
+    prediction = F.interpolate(prediction, size)[0][0]
     return frame_torch, prediction, logits
 
 
@@ -364,7 +371,7 @@ def sam_step(
         logits[:, [1]], (feature_size, feature_size), mode="bilinear"
     )
 
-    predictor.set_image(input_slice.astype(float))
+    predictor.set_image(input_slice.astype(np.float32))
     masks, scores, logits = predictor.predict(
         box=box,
         multimask_output=multimask_output,

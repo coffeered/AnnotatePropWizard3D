@@ -6,10 +6,12 @@ import click
 import numpy as np
 import SimpleITK as sitk
 import torch
+import torch.nn.functional as F
 from skimage.measure import label, regionprops
 from tqdm.auto import tqdm
 
-from cutie.inference.inference_core import InferenceCore
+# from cutie.inference.inference_core import InferenceCore
+from utils.inference_core_with_logits import InferenceCoreWithLogits
 from cutie.model.cutie import CUTIE
 from segment_anything import sam_model_registry
 from segment_anything.predictor_sammed import SammedPredictor
@@ -20,6 +22,8 @@ from utils.image_process import (
     get_slice,
     vos_step,
     sam_step,
+    interpolate_tensor,
+    pad_box,
 )
 from utils.yaml_loader import yaml_to_dotdict
 from gui.interactive_utils import (
@@ -91,37 +95,41 @@ def predict_case(
         index_z = init_center[0]
         slice_data, mask_data = get_slice(crop_img, crop_mask, index_z)
 
+        mask_transformed = np.where(mask_data == (i + 1), 1.0, 0.0)
+
         # Convert slice to torch tensor and interpolate
         frame_torch = image_to_torch(slice_data, device=DEVICE)  # [3, x, y]
-        init_frame_torch = frame_torch.clone()
-        # frame_torch = interpolate_tensor(
-        #     input_tensor=frame_torch, size=MODEL_SIZE, mode="bilinear"
-        # )  # [3, size, size]
+        # init_frame_torch = frame_torch.clone()
+        init_frame_torch = interpolate_tensor(
+            input_tensor=frame_torch, size=MODEL_SIZE, mode="bilinear"
+        )  # [3, size, size]
 
-        mask_transformed = torch.where(mask_data == (i + 1), 1, 0).float()
+        # mask_transformed = torch.where(mask_data == (i + 1), 1, 0).float()
         mask_torch = index_numpy_to_one_hot_torch(mask_transformed, 2).to(DEVICE)
-        # mask_torch = interpolate_tensor(
-        #     input_tensor=mask_torch, size=MODEL_SIZE, mode="nearest"
-        # )
+        mask_torch = interpolate_tensor(
+            input_tensor=mask_torch, size=MODEL_SIZE, mode="nearest"
+        )
 
         init_mask_torch = torch.zeros(TRACE_NUM, MODEL_SIZE, MODEL_SIZE).to(DEVICE)
-        init_mask_torch[0] = mask_torch
+        init_mask_torch[0] = mask_torch[1]
 
         vos_processor.clear_memory()
         vos_processor.step(init_frame_torch, init_mask_torch, idx_mask=False)
 
-        temp_center_area = mask_data.sum()
+        temp_center_area = mask_transformed.sum()
+
         index_z += 1
         while index_z < size_z:
             slice_data, mask_data = get_slice(crop_img, crop_mask, index_z)
-            if mask_data.sum() == 0:
+            mask_transformed = np.where(mask_data == (i + 1), 1.0, 0.0)
+            if mask_transformed.sum() == 0:
                 break
 
-            mask_transformed = torch.where(mask_data == (i + 1), 1, 0).float()
             frame_torch, prediction, logits = vos_step(
                 processor=vos_processor,
                 input_slice=slice_data,
-                size=mask_transformed.size(),
+                model_size=MODEL_SIZE,
+                size=mask_transformed.shape,
                 device=DEVICE,
             )
 
@@ -129,12 +137,21 @@ def predict_case(
             if len(regionprop) == 0:
                 break
 
-            box = regionprop[0].bbox
-            masks = sam_step(sam_predictor, slice_data, logits, box)
+            box = pad_box(regionprop[0].bbox, 1)
+            masks = sam_step(
+                sam_predictor,
+                slice_data,
+                logits,
+                box,
+            )
 
             # reset VOS
             mask_torch = torch.zeros(TRACE_NUM, MODEL_SIZE, MODEL_SIZE).to(DEVICE)
-            mask_torch[0] = masks[0]
+            resized_masks = F.interpolate(
+                torch.tensor(masks, device=DEVICE).unsqueeze(0),
+                (MODEL_SIZE, MODEL_SIZE),
+            )[0]
+            mask_torch[0] = resized_masks[0]
             vos_processor.step(frame_torch, mask_torch, idx_mask=False)
 
             current_tp = (mask_transformed * masks[0]).sum()
@@ -152,14 +169,15 @@ def predict_case(
         index_z = init_center[0] - 1
         while index_z >= 0:
             slice_data, mask_data = get_slice(crop_img, crop_mask, index_z)
-            if mask_data.sum() == 0:
+            mask_transformed = np.where(mask_data == (i + 1), 1.0, 0.0)
+            if mask_transformed.sum() == 0:
                 break
 
-            mask_transformed = torch.where(mask_data == (i + 1), 1, 0).float()
             frame_torch, prediction, logits = vos_step(
                 processor=vos_processor,
                 input_slice=slice_data,
-                size=mask_transformed.size(),
+                model_size=MODEL_SIZE,
+                size=mask_transformed.shape,
                 device=DEVICE,
             )
 
@@ -167,12 +185,21 @@ def predict_case(
             if len(regionprop) == 0:
                 break
 
-            box = regionprop[0].bbox
-            masks = sam_step(sam_predictor, slice_data, logits, box)
+            box = pad_box(regionprop[0].bbox, 1)
+            masks = sam_step(
+                sam_predictor,
+                slice_data,
+                logits,
+                box,
+            )
 
             # reset VOS
             mask_torch = torch.zeros(TRACE_NUM, MODEL_SIZE, MODEL_SIZE).to(DEVICE)
-            mask_torch[0] = masks[0]
+            resized_masks = F.interpolate(
+                torch.tensor(masks, device=DEVICE).unsqueeze(0),
+                (MODEL_SIZE, MODEL_SIZE),
+            )[0]
+            mask_torch[0] = resized_masks[0]
             vos_processor.step(frame_torch, mask_torch, idx_mask=False)
 
             current_tp = (mask_transformed * masks[0]).sum()
@@ -183,16 +210,19 @@ def predict_case(
             case_dices.append(case_dice)
 
             index_z -= 1
+
         if prop.area - temp_center_area > 0:
             case_dice_3D = (
-                2 * tp_4_dice / (prop.area + pred_4_dice + 1e-8 - temp_center_area)
+                2 * tp_4_dice / (prop.area + pred_4_dice - temp_center_area + 1e-8)
             )
             case_dice_3Ds.append(case_dice_3D)
-            tqdm.write(f"{case_dice_3D} {np.mean(case_dices)}")
+            tqdm.write(
+                f"case: {os.path.basename(folder)}, label_idx: {i}, {case_dice_3D} {np.mean(case_dices)}"
+            )
+    return case_dices, case_dice_3Ds
 
 
 @click.command()
-@click.option("--image_size", default=256, help="Size of image.")
 @click.option(
     "--sam_checkpoint",
     "-ckpt",
@@ -206,7 +236,7 @@ def predict_case(
     help="The medical dataset",
     type=click.Path(exists=True),
 )
-def run(image_size: int, sam_checkpoint: str, dataset: str):
+def run(sam_checkpoint: str, dataset: str):
     # defiune SAM components
     global MODEL_SIZE, DEVICE
 
@@ -214,9 +244,11 @@ def run(image_size: int, sam_checkpoint: str, dataset: str):
     if "sam-med2d" in sam_checkpoint:
         MODEL_SIZE = 256
         encoder_adapter = True
+        image_size = 256
     else:
         MODEL_SIZE = 480
         encoder_adapter = False
+        image_size = 1024
     args = dict(
         image_size=image_size,
         encoder_adapter=encoder_adapter,
@@ -243,7 +275,7 @@ def run(image_size: int, sam_checkpoint: str, dataset: str):
             )
         model_weights = torch.load(config.weights)
         cutie.load_weights(model_weights)
-    vos_processor = InferenceCore(cutie, cfg=config)
+    vos_processor = InferenceCoreWithLogits(cutie, cfg=config)
 
     # tps, fps, fns = list(), list(), list()
     dices, dices_3D = list(), list()
