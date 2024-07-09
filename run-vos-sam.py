@@ -279,7 +279,7 @@ def run(sam_checkpoint: str, dataset: str):
 
     # tps, fps, fns = list(), list(), list()
     dices, dices_3D = list(), list()
-    cases_folders = glob(os.path.join(dataset, "*"))
+    cases_folders = sorted(glob(os.path.join(dataset, "*")))
     for case_folder in tqdm(cases_folders):
         with torch.inference_mode():
             case_dices, case_dices_3D = predict_case(
