@@ -65,10 +65,10 @@ def predict_case(
             x_max = min(init_center[2] + MODEL_SIZE // 2, size_x)
 
             # new_center = (init_center[0], MODEL_SIZE // 2, MODEL_SIZE // 2)
-            padding_top = (MODEL_SIZE - size_y) // 2
-            padding_bottom = MODEL_SIZE - size_y - padding_top
-            padding_left = (MODEL_SIZE - size_x) // 2
-            padding_right = MODEL_SIZE - size_x - padding_left
+            padding_top = (MODEL_SIZE - (y_max - y_min)) // 2
+            padding_bottom = MODEL_SIZE - (y_max - y_min) - padding_top
+            padding_left = (MODEL_SIZE - (x_max - x_min)) // 2
+            padding_right = MODEL_SIZE - (x_max - x_min) - padding_left
 
             crop_img = crop_and_pad(
                 img,
