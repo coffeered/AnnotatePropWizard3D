@@ -30,7 +30,7 @@ def predict_case(folder, vos_processor):
     case_dices, case_size_zs = list(), list()
 
     try:
-        sitk_img = sitk.ReadImage(os.path.join(folder, "data.nii.gz"))
+        sitk_img = sitk.ReadImage(os.path.join(folder, "axc.nii.gz"))
         img = sitk.GetArrayFromImage(sitk_img)
         sitk_mask = sitk.ReadImage(os.path.join(folder, "seg.nii.gz"))
         mask = sitk.GetArrayFromImage(sitk_mask)
@@ -74,6 +74,7 @@ def predict_case(folder, vos_processor):
             "prop_index": i,
             "prop": prop,
         }
+
         rot_dict["pred"] = torch.zeros_like(rot_dict["img"], device=DEVICE).float()
 
         degree = determine_degree(size_x=size_x, size_y=size_y, size_z=size_z)
@@ -140,6 +141,9 @@ def run(dataset: str):
         case_tps, case_fns, case_fps, case_dices, case_size_zs = predict_case(
             folder=case_folder, vos_processor=vos_processor
         )
+
+        print(case_dices)
+
         tps.extend(case_tps)
         fps.extend(case_fps)
         fns.extend(case_fns)

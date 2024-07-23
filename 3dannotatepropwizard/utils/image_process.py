@@ -58,10 +58,11 @@ def get_slice(img_array, mask_array, idx):
         tuple: A tuple containing the normalized slice data and the corresponding mask data.
     """
     slice_data = np.stack([img_array[idx]] * 3, axis=2)
-    mask_data = mask_array[idx]
-
-    return slice_data, mask_data
-
+    if mask_array is not None:
+        mask_data = mask_array[idx]
+        return slice_data, mask_data
+    else:
+        return slice_data
 
 def normalize_volume(img):
     """
@@ -85,6 +86,7 @@ def get_side_pred(
 ):
     TRACE_NUM = 4
     # Transform ground truth, no background
+
     gt_transformed = torch.where(gt == (i + 1), 1, 0).float()
 
     target_rotation = int(rot_point[1])  # which is centroid z
@@ -330,14 +332,60 @@ def crop_and_pad(
     Returns:
         np.ndarray: The cropped and padded tensor as a NumPy array.
     """
-    crop = torch.tensor(input_tensor[:, y_min:y_max, x_min:x_max]).to(
-        dtype=torch.float, device=device
-    )
-    pad_left, pad_right, pad_top, pad_bottom = padding
-    padded = torch.nn.functional.pad(
-        crop, (pad_left, pad_right, pad_top, pad_bottom, 0, 0), mode="constant", value=0
-    )
+    if len(input_tensor.shape) == 3:
+        crop = torch.tensor(input_tensor[:, y_min:y_max, x_min:x_max]).to(
+            dtype=torch.float, device=device
+        )
+        pad_left, pad_right, pad_top, pad_bottom = padding
+        padded = torch.nn.functional.pad(
+            crop, (pad_left, pad_right, pad_top, pad_bottom, 0, 0), mode="constant", value=0
+        )
+    elif len(input_tensor.shape) == 2:
+        crop = torch.tensor(input_tensor[y_min:y_max, x_min:x_max]).to(
+            dtype=torch.float, device=device
+        )
+        pad_left, pad_right, pad_top, pad_bottom = padding
+        padded = torch.nn.functional.pad(
+            crop, (pad_left, pad_right, pad_top, pad_bottom), mode="constant", value=0
+        )
+    else:
+        raise Exception("input dimension is not support (2 or 3)")
     return padded.cpu().numpy()
+
+def crop_and_pad_reverse(
+    input_array: np.ndarray,
+    y_min: int,
+    y_max: int,
+    x_min: int,
+    x_max: int,
+    padding: Tuple[int, int, int, int],
+    origin_size: Tuple[int, int]
+) -> np.ndarray:
+    """
+    reverse a tensor to original shape according to crop and pad.
+
+    Args:
+        input_array (np.ndarray): The input tensor to be cropped and padded.
+        y_min (int): The minimum y-coordinate for cropping.
+        y_max (int): The maximum y-coordinate for cropping.
+        x_min (int): The minimum x-coordinate for cropping.
+        x_max (int): The maximum x-coordinate for cropping.
+        padding (Tuple[int, int, int, int]): A tuple of four integers (pad_left, pad_right, pad_top, pad_bottom) for padding.
+        origin_size: (Tuple int, int): original size for input
+        device (torch.device): The device to move the tensor to.
+        dtype (torch.dtype, optional): The data type of the tensor (default is torch.float).
+
+    Returns:
+        np.ndarray: The cropped and padded tensor as a NumPy array.
+    """ 
+
+    pad_left, pad_right, pad_top, pad_bottom = padding
+    reverse_padded = input_array[pad_top:input_array.shape[0]-pad_bottom, pad_left:input_array.shape[1]-pad_right]
+
+    origin_mask = np.zeros(origin_size)
+    origin_mask[y_min:y_max, x_min:x_max] = reverse_padded
+        
+    return origin_mask
 
 
 def pad_box(box, pad):

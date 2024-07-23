@@ -40,14 +40,16 @@ def predict_case(
     TRACE_NUM = 4
     case_dices, case_dice_3Ds = list(), list()
     try:
-        sitk_img = sitk.ReadImage(os.path.join(folder, "data.nii.gz"))
+        sitk_img = sitk.ReadImage(os.path.join(folder, "axc.nii.gz"))
         img = sitk.GetArrayFromImage(sitk_img)
         sitk_mask = sitk.ReadImage(os.path.join(folder, "seg.nii.gz"))
         mask = sitk.GetArrayFromImage(sitk_mask)
     except RuntimeError:
         return case_dices, case_dice_3Ds
 
+    
     img = normalize_volume(img.astype(float))
+
     mask = label(mask)
     size_z, size_y, size_x = img.shape
 
@@ -278,7 +280,7 @@ def run(sam_checkpoint: str, dataset: str):
     vos_processor = InferenceCoreWithLogits(cutie, cfg=config)
 
     # tps, fps, fns = list(), list(), list()
-    dices, dices_3D = list(), list()
+    dices, dices_3D, cases = list(), list(), list()
     cases_folders = sorted(glob(os.path.join(dataset, "*")))
     for case_folder in tqdm(cases_folders):
         with torch.inference_mode():
@@ -289,7 +291,11 @@ def run(sam_checkpoint: str, dataset: str):
             )
         dices.extend(case_dices)
         dices_3D.extend(case_dices_3D)
+        cases.extend(case_folder)
 
-
+    np.save('dices.npy', dices)
+    np.save('dices_3D.npy', dices_3D)
+    np.save('cases.npy', cases)
+    
 if __name__ == "__main__":
     run()
