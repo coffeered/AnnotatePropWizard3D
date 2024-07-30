@@ -7,7 +7,7 @@ from xyroll_prediction import XYrollPrediction
 from skimage.measure import label, regionprops
 import torch
 
-model = XYrollPrediction('/volume/willy-dev/sota/3DAnnotatePropWizard/yaml/eval_config.yaml')
+model = XYrollPrediction('../yaml/eval_config.yaml')
 
 cases_folders = glob(os.path.join("/volume/open-dataset-ssd/ai99/gen_data/meningioma", "*"))
 for case_folder in tqdm(cases_folders):
@@ -20,7 +20,7 @@ for case_folder in tqdm(cases_folders):
 
     mask = mask.astype(np.uint8)
 
-    for prop in regionprops(mask):
+    for prop in regionprops(mask):ß
 
         init_center = np.array(prop.centroid, dtype=int)
         index_z = init_center[0]
