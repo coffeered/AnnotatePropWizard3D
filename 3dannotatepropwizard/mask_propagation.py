@@ -10,12 +10,12 @@ import torch.nn.functional as F
 from skimage.measure import label, regionprops
 from tqdm.auto import tqdm
 
-from .utils.inference_core_with_logits import InferenceCoreWithLogits
-from .cutie.model.cutie import CUTIE
-from .segment_anything import sam_model_registry
-from .segment_anything.predictor_sammed import SammedPredictor
-from .utils.checkpoint import download_ckpt
-from .utils.image_process import (
+from utils.inference_core_with_logits import InferenceCoreWithLogits
+from cutie.model.cutie import CUTIE
+from segment_anything import sam_model_registry
+from segment_anything.predictor_sammed import SammedPredictor
+from utils.checkpoint import download_ckpt
+from utils.image_process import (
     normalize_volume,
     crop_and_pad,
     crop_and_pad_reverse,
@@ -25,8 +25,8 @@ from .utils.image_process import (
     interpolate_tensor,
     pad_box,
 )
-from .utils.yaml_loader import yaml_to_dotdict
-from .gui.interactive_utils import (
+from utils.yaml_loader import yaml_to_dotdict
+from gui.interactive_utils import (
     image_to_torch,
     index_numpy_to_one_hot_torch,
 )

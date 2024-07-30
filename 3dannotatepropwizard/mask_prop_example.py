@@ -1,5 +1,4 @@
 import os
-import gdown
 import SimpleITK as sitk
 from tqdm import tqdm
 from glob import glob
@@ -7,22 +6,31 @@ import numpy as np
 from mask_propagation import MaskPropagation
 from skimage.measure import label, regionprops
 import torch
+import gdown
 
-url = 'https://drive.google.com/file/d/1TtQyLI0X6nq90n0dw3zJFFZZzgrZj8br/view?usp=sharing'
-output = 'amos_0001.data.nii.gz'
-gdown.download(url, output, quiet=False)
+output = 'amos_0001_data.nii.gz'
+if os.path.exists(output):
+    file_id = '1TtQyLI0X6nq90n0dw3zJFFZZzgrZj8br'
+    url = f'https://drive.google.com/uc?id={file_id}'
+    gdown.download(url, output)
 
-url = 'https://drive.google.com/file/d/1MgfbufE3802ZsNwQO8Xloce1ezXMszpM/view?usp=sharing'
-output = 'amos_0001.label.nii.gz'
-gdown.download(url, output, quiet=False)
+output = 'amos_0001_label.nii.gz'
+if os.path.exists(output):
+    file_id = '1MgfbufE3802ZsNwQO8Xloce1ezXMszpM'
+    url = f'https://drive.google.com/uc?id={file_id}'
+    gdown.download(url, output)
 
 model = MaskPropagation('../weights/sam_vit_b_01ec64.pth', '../yaml/eval_config.yaml')
 
-sitk_img = sitk.ReadImage('amos_0001.data.nii.gz')
+sitk_img = sitk.ReadImage('amos_0001_data.nii.gz')
 img = sitk.GetArrayFromImage(sitk_img)
 
-sitk_mask = sitk.ReadImage('amos_0001.label.nii.gz')
+sitk_mask = sitk.ReadImage('amos_0001_label.nii.gz')
 mask = sitk.GetArrayFromImage(sitk_mask)
+
+mask = mask.astype(int)
+mask[mask != 1] = 0
+mask[mask == 1] = 1
 
 mask = mask.astype(np.uint8)
 labeled_mask = np.zeros_like(mask)

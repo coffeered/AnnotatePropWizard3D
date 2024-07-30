@@ -8,10 +8,10 @@ import torch
 from skimage.measure import label, regionprops
 from tqdm.auto import tqdm
 
-from .cutie.inference.inference_core import InferenceCore
-from .cutie.model.cutie import CUTIE
-from .utils.checkpoint import download_ckpt
-from .utils.image_process import (
+from cutie.inference.inference_core import InferenceCore
+from cutie.model.cutie import CUTIE
+from utils.checkpoint import download_ckpt
+from utils.image_process import (
     determine_degree,
     interpolate_tensor,
     normalize_volume,
@@ -19,7 +19,7 @@ from .utils.image_process import (
     reset_rotate,
     rotate_predict,
 )
-from .utils.yaml_loader import yaml_to_dotdict
+from utils.yaml_loader import yaml_to_dotdict
 
 MAX_LENGTH = 512
 
@@ -85,7 +85,7 @@ class XYrollPrediction:
         prop = regionprops(mask)[0]
 
         centroid = rescale_centroid(
-            [input_z, prop.centroid[0], prop.centroid[1]],
+            prop.centroid,
             size_z=size_z,
             size_y=size_y,
             size_x=size_x,
@@ -104,7 +104,7 @@ class XYrollPrediction:
 
         rot_dict["pred"] = torch.zeros_like(rot_dict["img"], device=self.device).float()
 
-        degree = determine_degree(size_x=size_x, size_y=size_y, size_z=size_z)
+        degree = 2
         offset = 0
         while offset <= 90:
             rot_dict, offset = rotate_predict(
