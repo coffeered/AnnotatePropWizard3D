@@ -1,7 +1,0 @@
-[submodule "submodules/SAM_Med2D"]
-	path = submodules/SAM_Med2D
-	url = https://github.com/OpenGVLab/SAM-Med2D.git
-
-[submodule "submodules/Cutie"]
-	path = submodules/Cutie
-	url = https://github.com/hkchengrex/Cutie.git
