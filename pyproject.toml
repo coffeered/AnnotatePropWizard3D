@@ -7,21 +7,21 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.10"
-torch = "2.1.0"
+torch = { version = "2.1.0+cu121", source = "torch-cu121" }
 numpy = "^1.26.4"
 matplotlib = "^3.9.0"
-opencv-python = "4.8.0.76"
+opencv-python = "~4.5.5.62"
 simpleitk = "^2.3.1"
 scikit-image = "^0.23.2"
-torchvision = "0.16.0"
+torchvision = { version = "~0.16.0+cu121", source = "torch-cu121" }
 albumentations = "^1.4.7"
 gdown = "^5.2.0"
 click = "^8.1.7"
 tqdm = "^4.66.4"
 glob2 = "^0.7"
 omegaconf = { version = "^2.3.0", optional = true }
-torchaudio = "2.1.0"
-
+Cutie = { path = "submodules/Cutie", develop = false }
+SAM-Med2D = { path = "submodules/SAM-Med2D", develop = false }
 
 [tool.poetry.extras]
 cutie = ["omegaconf"]
