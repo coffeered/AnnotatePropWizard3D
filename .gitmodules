@@ -1,5 +1,5 @@
-[submodule "submodules/SAM_Med2D"]
-	path = submodules/SAM_Med2D
+[submodule "submodules/SAM-Med2D"]
+	path = submodules/SAM-Med2D
 	url = https://github.com/OpenGVLab/SAM-Med2D.git
 
 [submodule "submodules/Cutie"]
