@@ -1,0 +1,1 @@
+MIN_MASK_AREA = 100
