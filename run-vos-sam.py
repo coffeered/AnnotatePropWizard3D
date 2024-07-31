@@ -10,26 +10,27 @@ import torch.nn.functional as F
 from skimage.measure import label, regionprops
 from tqdm.auto import tqdm
 
-# from cutie.inference.inference_core import InferenceCore
-from utils.inference_core_with_logits import InferenceCoreWithLogits
-from cutie.model.cutie import CUTIE
-from segment_anything import sam_model_registry
-from segment_anything.predictor_sammed import SammedPredictor
-from utils.checkpoint import download_ckpt
-from utils.image_process import (
-    normalize_volume,
-    crop_and_pad,
-    get_slice,
-    vos_step,
-    sam_step,
-    interpolate_tensor,
-    pad_box,
-)
-from utils.yaml_loader import yaml_to_dotdict
-from gui.interactive_utils import (
+from annotatepropwizard3d.cutie.model.cutie import CUTIE
+from annotatepropwizard3d.gui.interactive_utils import (
     image_to_torch,
     index_numpy_to_one_hot_torch,
 )
+from annotatepropwizard3d.segment_anything import sam_model_registry
+from annotatepropwizard3d.segment_anything.predictor_sammed import SammedPredictor
+from annotatepropwizard3d.utils.checkpoint import download_ckpt
+from annotatepropwizard3d.utils.image_process import (
+    crop_and_pad,
+    get_slice,
+    interpolate_tensor,
+    normalize_volume,
+    pad_box,
+    sam_step,
+    vos_step,
+)
+from annotatepropwizard3d.utils.inference_core_with_logits import (
+    InferenceCoreWithLogits,
+)
+from annotatepropwizard3d.utils.yaml_loader import yaml_to_dotdict
 
 
 def predict_case(
@@ -47,7 +48,6 @@ def predict_case(
     except RuntimeError:
         return case_dices, case_dice_3Ds
 
-    
     img = normalize_volume(img.astype(float))
 
     mask = label(mask)
@@ -219,7 +219,8 @@ def predict_case(
             )
             case_dice_3Ds.append(case_dice_3D)
             tqdm.write(
-                f"case: {os.path.basename(folder)}, label_idx: {i}, {case_dice_3D} {np.mean(case_dices)}"
+                f"case: {os.path.basename(folder)}, "
+                f"label_idx: {i}, {case_dice_3D} {np.mean(case_dices)}"
             )
     return case_dices, case_dice_3Ds
 
@@ -293,9 +294,10 @@ def run(sam_checkpoint: str, dataset: str):
         dices_3D.extend(case_dices_3D)
         cases.extend(case_folder)
 
-    np.save('dices.npy', dices)
-    np.save('dices_3D.npy', dices_3D)
-    np.save('cases.npy', cases)
-    
+    np.save("dices.npy", dices)
+    np.save("dices_3D.npy", dices_3D)
+    np.save("cases.npy", cases)
+
+
 if __name__ == "__main__":
     run()
