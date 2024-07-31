@@ -5,7 +5,7 @@ Call finalize and create a new Integrator when you want to display/log
 """
 from typing import Dict, Callable, Tuple
 import torch
-from cutie.utils.logger import TensorboardLogger
+from annotatepropwizard3d.cutie.utils.logger import TensorboardLogger
 
 
 class Integrator:
@@ -55,15 +55,13 @@ class Integrator:
 
     # Average and output the metrics
     def finalize(self, exp_id: str, prefix: str, it: int) -> None:
-
         for hook in self.hooks:
             k, v = hook(self.values)
             self.add_tensor(k, v)
 
         outputs = {}
         for k, v in self.values.items():
-
-            if k[:4] == 'hide':
+            if k[:4] == "hide":
                 continue
 
             avg = v / self.counts[k]

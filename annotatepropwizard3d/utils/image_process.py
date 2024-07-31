@@ -6,7 +6,10 @@ import torch
 import torch.nn.functional as F
 from torchvision.transforms.functional import InterpolationMode, rotate
 
-from gui.interactive_utils import image_to_torch, torch_prob_to_numpy_mask
+from annotatepropwizard3d.gui.interactive_utils import (
+    image_to_torch,
+    torch_prob_to_numpy_mask,
+)
 
 __all__ = [
     "determine_degree",
@@ -63,6 +66,7 @@ def get_slice(img_array, mask_array, idx):
         return slice_data, mask_data
     else:
         return slice_data
+
 
 def normalize_volume(img):
     """
@@ -338,7 +342,10 @@ def crop_and_pad(
         )
         pad_left, pad_right, pad_top, pad_bottom = padding
         padded = torch.nn.functional.pad(
-            crop, (pad_left, pad_right, pad_top, pad_bottom, 0, 0), mode="constant", value=0
+            crop,
+            (pad_left, pad_right, pad_top, pad_bottom, 0, 0),
+            mode="constant",
+            value=0,
         )
     elif len(input_tensor.shape) == 2:
         crop = torch.tensor(input_tensor[y_min:y_max, x_min:x_max]).to(
@@ -352,6 +359,7 @@ def crop_and_pad(
         raise Exception("input dimension is not support (2 or 3)")
     return padded.cpu().numpy()
 
+
 def crop_and_pad_reverse(
     input_array: np.ndarray,
     y_min: int,
@@ -359,7 +367,7 @@ def crop_and_pad_reverse(
     x_min: int,
     x_max: int,
     padding: Tuple[int, int, int, int],
-    origin_size: Tuple[int, int]
+    origin_size: Tuple[int, int],
 ) -> np.ndarray:
     """
     reverse a tensor to original shape according to crop and pad.
@@ -377,14 +385,17 @@ def crop_and_pad_reverse(
 
     Returns:
         np.ndarray: The cropped and padded tensor as a NumPy array.
-    """ 
+    """
 
     pad_left, pad_right, pad_top, pad_bottom = padding
-    reverse_padded = input_array[pad_top:input_array.shape[0]-pad_bottom, pad_left:input_array.shape[1]-pad_right]
+    reverse_padded = input_array[
+        pad_top : input_array.shape[0] - pad_bottom,
+        pad_left : input_array.shape[1] - pad_right,
+    ]
 
     origin_mask = np.zeros(origin_size)
     origin_mask[y_min:y_max, x_min:x_max] = reverse_padded
-        
+
     return origin_mask
 
 

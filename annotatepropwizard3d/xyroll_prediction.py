@@ -4,10 +4,10 @@ import numpy as np
 import torch
 from skimage.measure import regionprops
 
-from cutie.inference.inference_core import InferenceCore
-from cutie.model.cutie import CUTIE
-from utils.checkpoint import download_ckpt
-from utils.image_process import (
+from annotatepropwizard3d.cutie.inference.inference_core import InferenceCore
+from annotatepropwizard3d.cutie.model.cutie import CUTIE
+from annotatepropwizard3d.utils.checkpoint import download_ckpt
+from annotatepropwizard3d.utils.image_process import (
     determine_degree,
     interpolate_tensor,
     normalize_volume,
@@ -15,7 +15,7 @@ from utils.image_process import (
     reset_rotate,
     rotate_predict,
 )
-from utils.yaml_loader import yaml_to_dotdict
+from annotatepropwizard3d.utils.yaml_loader import yaml_to_dotdict
 
 MAX_LENGTH = 512
 

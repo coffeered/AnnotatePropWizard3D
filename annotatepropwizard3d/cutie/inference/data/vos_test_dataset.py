@@ -3,19 +3,21 @@ from os import path
 import json
 from typing import Iterable, Optional
 
-from cutie.inference.data.video_reader import VideoReader
+from annotatepropwizard3d.cutie.inference.data.video_reader import VideoReader
 
 
 class VOSTestDataset:
-    def __init__(self,
-                 image_dir: str,
-                 mask_dir: str,
-                 *,
-                 use_all_masks: bool,
-                 req_frames_json: Optional[str] = None,
-                 size: int = -1,
-                 size_dir: Optional[str] = None,
-                 subset: Optional[str] = None):
+    def __init__(
+        self,
+        image_dir: str,
+        mask_dir: str,
+        *,
+        use_all_masks: bool,
+        req_frames_json: Optional[str] = None,
+        size: int = -1,
+        size_dir: Optional[str] = None,
+        subset: Optional[str] = None
+    ):
         self.image_dir = image_dir
         self.mask_dir = mask_dir
         self.use_all_masks = use_all_masks
@@ -34,13 +36,13 @@ class VOSTestDataset:
             # YouTubeVOS style json
             with open(req_frames_json) as f:
                 # read meta.json to know which frame is required for evaluation
-                meta = json.load(f)['videos']
+                meta = json.load(f)["videos"]
 
                 for vid in self.vid_list:
                     req_frames = []
-                    objects = meta[vid]['objects']
+                    objects = meta[vid]["objects"]
                     for value in objects.values():
-                        req_frames.extend(value['frames'])
+                        req_frames.extend(value["frames"])
 
                     req_frames = list(set(req_frames))
                     self.req_frame_list[vid] = req_frames
@@ -54,7 +56,9 @@ class VOSTestDataset:
                 size=self.size,
                 to_save=self.req_frame_list.get(video, None),
                 use_all_masks=self.use_all_masks,
-                size_dir=path.join(self.size_dir, video) if self.size_dir is not None else None,
+                size_dir=path.join(self.size_dir, video)
+                if self.size_dir is not None
+                else None,
             )
 
     def __len__(self):

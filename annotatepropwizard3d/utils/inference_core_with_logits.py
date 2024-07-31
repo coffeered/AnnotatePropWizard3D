@@ -9,13 +9,17 @@ import logging
 import torch
 import torch.nn.functional as F
 
-# from cutie.inference.memory_manager import MemoryManager
-# from cutie.inference.object_manager import ObjectManager
-# from cutie.inference.image_feature_store import ImageFeatureStore
-# from cutie.model.cutie import CUTIE
-from cutie.utils.tensor_utils import pad_divide_by, unpad, aggregate
+# from annotatepropwizard3d.cutie.inference.memory_manager import MemoryManager
+# from annotatepropwizard3d.cutie.inference.object_manager import ObjectManager
+# from annotatepropwizard3d.cutie.inference.image_feature_store import ImageFeatureStore
+# from annotatepropwizard3d.cutie.model.cutie import CUTIE
+from annotatepropwizard3d.cutie.utils.tensor_utils import (
+    pad_divide_by,
+    unpad,
+    aggregate,
+)
 
-from cutie.inference.inference_core import InferenceCore
+from annotatepropwizard3d.cutie.inference.inference_core import InferenceCore
 
 log = logging.getLogger()
 

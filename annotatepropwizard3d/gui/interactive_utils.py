@@ -5,10 +5,10 @@ import numpy as np
 
 import torch
 import torch.nn.functional as F
-from cutie.utils.palette import davis_palette
+from annotatepropwizard3d.cutie.utils.palette import davis_palette
 
 
-def image_to_torch(frame: np.ndarray, device: str = 'cuda'):
+def image_to_torch(frame: np.ndarray, device: str = "cuda"):
     # frame: H*W*3 numpy array
     frame = frame.transpose(2, 0, 1)
     frame = torch.from_numpy(frame).float().to(device, non_blocking=True) / 255
@@ -49,68 +49,78 @@ grayscale_weights = np.array([[0.3, 0.59, 0.11]]).astype(np.float32)
 grayscale_weights_torch = torch.from_numpy(grayscale_weights).to(device).unsqueeze(0)
 
 
-def get_visualization(mode: Literal['image', 'mask', 'fade', 'davis', 'light', 'popup', 'layer',
-                                    'rgba'], image: np.ndarray, mask: np.ndarray, layer: np.ndarray,
-                      target_objects: List[int]) -> np.ndarray:
-    if mode == 'image':
+def get_visualization(
+    mode: Literal["image", "mask", "fade", "davis", "light", "popup", "layer", "rgba"],
+    image: np.ndarray,
+    mask: np.ndarray,
+    layer: np.ndarray,
+    target_objects: List[int],
+) -> np.ndarray:
+    if mode == "image":
         return image
-    elif mode == 'mask':
+    elif mode == "mask":
         return color_map_np[mask]
-    elif mode == 'fade':
+    elif mode == "fade":
         return overlay_davis(image, mask, fade=True)
-    elif mode == 'davis':
+    elif mode == "davis":
         return overlay_davis(image, mask)
-    elif mode == 'light':
+    elif mode == "light":
         return overlay_davis(image, mask, 0.9)
-    elif mode == 'popup':
+    elif mode == "popup":
         return overlay_popup(image, mask, target_objects)
-    elif mode == 'layer':
+    elif mode == "layer":
         if layer is None:
-            print('Layer file not given. Defaulting to DAVIS.')
+            print("Layer file not given. Defaulting to DAVIS.")
             return overlay_davis(image, mask)
         else:
             return overlay_layer(image, mask, layer, target_objects)
-    elif mode == 'rgba':
+    elif mode == "rgba":
         return overlay_rgba(image, mask, target_objects)
     else:
         raise NotImplementedError
 
 
-def get_visualization_torch(mode: Literal['image', 'mask', 'fade', 'davis', 'light', 'popup',
-                                          'layer', 'rgba'], image: torch.Tensor, prob: torch.Tensor,
-                            layer: torch.Tensor, target_objects: List[int]) -> np.ndarray:
-    if mode == 'image':
+def get_visualization_torch(
+    mode: Literal["image", "mask", "fade", "davis", "light", "popup", "layer", "rgba"],
+    image: torch.Tensor,
+    prob: torch.Tensor,
+    layer: torch.Tensor,
+    target_objects: List[int],
+) -> np.ndarray:
+    if mode == "image":
         return image
-    elif mode == 'mask':
+    elif mode == "mask":
         mask = torch.max(prob, dim=0).indices
         return (color_map_torch[mask] * 255).byte().cpu().numpy()
-    elif mode == 'fade':
+    elif mode == "fade":
         return overlay_davis_torch(image, prob, fade=True)
-    elif mode == 'davis':
+    elif mode == "davis":
         return overlay_davis_torch(image, prob)
-    elif mode == 'light':
+    elif mode == "light":
         return overlay_davis_torch(image, prob, 0.9)
-    elif mode == 'popup':
+    elif mode == "popup":
         return overlay_popup_torch(image, prob, target_objects)
-    elif mode == 'layer':
+    elif mode == "layer":
         if layer is None:
-            print('Layer file not given. Defaulting to DAVIS.')
+            print("Layer file not given. Defaulting to DAVIS.")
             return overlay_davis_torch(image, prob)
         else:
             return overlay_layer_torch(image, prob, layer, target_objects)
-    elif mode == 'rgba':
+    elif mode == "rgba":
         return overlay_rgba_torch(image, prob, target_objects)
     else:
         raise NotImplementedError
 
 
-def overlay_davis(image: np.ndarray, mask: np.ndarray, alpha: float = 0.5, fade: bool = False):
-    """ Overlay segmentation on top of RGB image. from davis official"""
+def overlay_davis(
+    image: np.ndarray, mask: np.ndarray, alpha: float = 0.5, fade: bool = False
+):
+    """Overlay segmentation on top of RGB image. from davis official"""
     im_overlay = image.copy()
 
     colored_mask = color_map_np[mask]
     foreground = image * alpha + (1 - alpha) * colored_mask
-    binary_mask = (mask > 0)
+    binary_mask = mask > 0
     # Compose image
     im_overlay[binary_mask] = foreground[binary_mask]
     if fade:
@@ -128,8 +138,9 @@ def overlay_popup(image: np.ndarray, mask: np.ndarray, target_objects: List[int]
     return im_overlay.astype(image.dtype)
 
 
-def overlay_layer(image: np.ndarray, mask: np.ndarray, layer: np.ndarray,
-                  target_objects: List[int]):
+def overlay_layer(
+    image: np.ndarray, mask: np.ndarray, layer: np.ndarray, target_objects: List[int]
+):
     # insert a layer between foreground and background
     # The CPU version is less accurate because we are using the hard mask
     # The GPU version has softer edges as it uses soft probabilities
@@ -137,23 +148,27 @@ def overlay_layer(image: np.ndarray, mask: np.ndarray, layer: np.ndarray,
     layer_alpha = layer[:, :, 3].astype(np.float32)[:, :, np.newaxis] / 255
     layer_rgb = layer[:, :, :3]
     background_alpha = (1 - obj_mask) * (1 - layer_alpha)
-    im_overlay = (image * background_alpha + layer_rgb * (1 - obj_mask) * layer_alpha +
-                  image * obj_mask).clip(0, 255)
+    im_overlay = (
+        image * background_alpha
+        + layer_rgb * (1 - obj_mask) * layer_alpha
+        + image * obj_mask
+    ).clip(0, 255)
     return im_overlay.astype(image.dtype)
 
 
 def overlay_rgba(image: np.ndarray, mask: np.ndarray, target_objects: List[int]):
     # Put the mask is in the alpha channel
-    obj_mask = (np.isin(mask, target_objects)).astype(np.float32)[:, :, np.newaxis] * 255
+    obj_mask = (np.isin(mask, target_objects)).astype(np.float32)[
+        :, :, np.newaxis
+    ] * 255
     im_overlay = np.concatenate([image, obj_mask], axis=-1)
     return im_overlay.astype(image.dtype)
 
 
-def overlay_davis_torch(image: torch.Tensor,
-                        prob: torch.Tensor,
-                        alpha: float = 0.5,
-                        fade: bool = False):
-    """ Overlay segmentation on top of RGB image. from davis official"""
+def overlay_davis_torch(
+    image: torch.Tensor, prob: torch.Tensor, alpha: float = 0.5, fade: bool = False
+):
+    """Overlay segmentation on top of RGB image. from davis official"""
     # Changes the image in-place to avoid copying
     # NOTE: Make sure you no longer use image after calling this function
     image = image.permute(1, 2, 0)
@@ -162,7 +177,7 @@ def overlay_davis_torch(image: torch.Tensor,
 
     colored_mask = color_map_torch[mask]
     foreground = image * alpha + (1 - alpha) * colored_mask
-    binary_mask = (mask > 0)
+    binary_mask = mask > 0
     # Compose image
     im_overlay[binary_mask] = foreground[binary_mask]
     if fade:
@@ -172,7 +187,9 @@ def overlay_davis_torch(image: torch.Tensor,
     return im_overlay
 
 
-def overlay_popup_torch(image: torch.Tensor, prob: torch.Tensor, target_objects: List[int]):
+def overlay_popup_torch(
+    image: torch.Tensor, prob: torch.Tensor, target_objects: List[int]
+):
     # Keep foreground colored. Convert background to grayscale.
     image = image.permute(1, 2, 0)
 
@@ -192,8 +209,12 @@ def overlay_popup_torch(image: torch.Tensor, prob: torch.Tensor, target_objects:
     return im_overlay
 
 
-def overlay_layer_torch(image: torch.Tensor, prob: torch.Tensor, layer: torch.Tensor,
-                        target_objects: List[int]):
+def overlay_layer_torch(
+    image: torch.Tensor,
+    prob: torch.Tensor,
+    layer: torch.Tensor,
+    target_objects: List[int],
+):
     # insert a layer between foreground and background
     # The CPU version is less accurate because we are using the hard mask
     # The GPU version has softer edges as it uses soft probabilities
@@ -208,14 +229,19 @@ def overlay_layer_torch(image: torch.Tensor, prob: torch.Tensor, layer: torch.Te
     layer_rgb = layer[:, :, :3]
     # background_alpha = torch.maximum(obj_mask, layer_alpha)
     background_alpha = (1 - obj_mask) * (1 - layer_alpha)
-    im_overlay = (image * background_alpha + layer_rgb * (1 - obj_mask) * layer_alpha +
-                  image * obj_mask).clip(0, 1)
+    im_overlay = (
+        image * background_alpha
+        + layer_rgb * (1 - obj_mask) * layer_alpha
+        + image * obj_mask
+    ).clip(0, 1)
 
     im_overlay = (im_overlay * 255).byte().cpu().numpy()
     return im_overlay
 
 
-def overlay_rgba_torch(image: torch.Tensor, prob: torch.Tensor, target_objects: List[int]):
+def overlay_rgba_torch(
+    image: torch.Tensor, prob: torch.Tensor, target_objects: List[int]
+):
     image = image.permute(1, 2, 0)
 
     if len(target_objects) == 0:

@@ -3,7 +3,7 @@ import SimpleITK as sitk
 from tqdm import tqdm
 from glob import glob
 import numpy as np
-from mask_propagation import MaskPropagation
+from annotatepropwizard3d.mask_propagation import MaskPropagation
 from skimage.measure import regionprops
 import torch
 

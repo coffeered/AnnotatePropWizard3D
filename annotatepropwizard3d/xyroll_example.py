@@ -7,7 +7,7 @@ import torch
 from skimage.measure import regionprops
 from tqdm import tqdm
 
-from .xyroll_prediction import XYrollPrediction
+from annotatepropwizard3d.xyroll_prediction import XYrollPrediction
 
 model = XYrollPrediction(
     "/volume/willy-dev/sota/3DAnnotatePropWizard/yaml/eval_config.yaml"

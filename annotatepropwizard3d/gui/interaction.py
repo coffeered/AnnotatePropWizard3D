@@ -9,12 +9,16 @@ from typing import Tuple
 import torch
 import torch.nn.functional as F
 
-from gui.click_controller import ClickController
+from annotatepropwizard3d.gui.click_controller import ClickController
 
 
-def aggregate_wbg(prob: torch.Tensor, keep_bg: bool = False, hard: bool = False) -> torch.Tensor:
+def aggregate_wbg(
+    prob: torch.Tensor, keep_bg: bool = False, hard: bool = False
+) -> torch.Tensor:
     k, h, w = prob.shape
-    new_prob = torch.cat([torch.prod(1 - prob, dim=0, keepdim=True), prob], 0).clamp(1e-7, 1 - 1e-7)
+    new_prob = torch.cat([torch.prod(1 - prob, dim=0, keepdim=True), prob], 0).clamp(
+        1e-7, 1 - 1e-7
+    )
     logits = torch.log((new_prob / (1 - new_prob)))
 
     if hard:
@@ -28,8 +32,13 @@ def aggregate_wbg(prob: torch.Tensor, keep_bg: bool = False, hard: bool = False)
 
 
 class Interaction:
-    def __init__(self, image: torch.Tensor, prev_mask: torch.Tensor, true_size: Tuple[int, int],
-                 controller: ClickController):
+    def __init__(
+        self,
+        image: torch.Tensor,
+        prev_mask: torch.Tensor,
+        true_size: Tuple[int, int],
+        controller: ClickController,
+    ):
         self.image = image
         self.prev_mask = prev_mask
         self.controller = controller
@@ -44,8 +53,14 @@ class Interaction:
 
 
 class ClickInteraction(Interaction):
-    def __init__(self, image: torch.Tensor, prev_mask: torch.Tensor, true_size: Tuple[int, int],
-                 controller: ClickController, tar_obj: int):
+    def __init__(
+        self,
+        image: torch.Tensor,
+        prev_mask: torch.Tensor,
+        true_size: Tuple[int, int],
+        controller: ClickController,
+        tar_obj: int,
+    ):
         """
         prev_mask in a prob. form
         """
@@ -74,17 +89,13 @@ class ClickInteraction(Interaction):
         # Do the prediction
         if self.first_click:
             last_obj_mask = self.prev_mask[self.tar_obj].unsqueeze(0).unsqueeze(0)
-            self.obj_mask = self.controller.interact(self.image.unsqueeze(0),
-                                                     x,
-                                                     y,
-                                                     not is_neg,
-                                                     prev_mask=last_obj_mask)
+            self.obj_mask = self.controller.interact(
+                self.image.unsqueeze(0), x, y, not is_neg, prev_mask=last_obj_mask
+            )
         else:
-            self.obj_mask = self.controller.interact(self.image.unsqueeze(0),
-                                                     x,
-                                                     y,
-                                                     not is_neg,
-                                                     prev_mask=None)
+            self.obj_mask = self.controller.interact(
+                self.image.unsqueeze(0), x, y, not is_neg, prev_mask=None
+            )
 
         if self.first_click:
             self.first_click = False
