@@ -1,12 +1,8 @@
 import os
-from glob import glob
 
-import click
 import numpy as np
-import SimpleITK as sitk
 import torch
-from skimage.measure import label, regionprops
-from tqdm.auto import tqdm
+from skimage.measure import regionprops
 
 from cutie.inference.inference_core import InferenceCore
 from cutie.model.cutie import CUTIE
@@ -23,10 +19,9 @@ from utils.yaml_loader import yaml_to_dotdict
 
 MAX_LENGTH = 512
 
+
 class XYrollPrediction:
-
-    def __init__(self, cutie_yaml:str):
-
+    def __init__(self, cutie_yaml: str):
         """
         Initialize the XYrollPrediction class.
 
@@ -35,10 +30,10 @@ class XYrollPrediction:
         """
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
+
         with torch.inference_mode():
             config = yaml_to_dotdict(cutie_yaml)
-    
+
             # Load the network weights
             cutie = CUTIE(config).to(self.device).eval()
             if not os.path.isfile(config.weights):
@@ -51,7 +46,6 @@ class XYrollPrediction:
         self.trace_num = 4
 
     def predict(self, img, inital_mask, input_z):
-
         """
         Predict the XYroll prediction for a given input image and initial mask.
 
@@ -80,7 +74,9 @@ class XYrollPrediction:
             mode="nearest",
         )
         tensor_img = tensor_img.permute(1, 0, 2).contiguous()  # [z, y, x] -> [y, z, x]
-        tensor_mask = tensor_mask.permute(1, 0, 2).contiguous()  # [z, y, x] -> [y, z, x]
+        tensor_mask = tensor_mask.permute(
+            1, 0, 2
+        ).contiguous()  # [z, y, x] -> [y, z, x]
 
         prop = regionprops(mask)[0]
 

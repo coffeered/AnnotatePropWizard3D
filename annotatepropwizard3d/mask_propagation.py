@@ -2,13 +2,10 @@ import os
 from glob import glob
 from types import SimpleNamespace
 
-import click
 import numpy as np
-import SimpleITK as sitk
 import torch
 import torch.nn.functional as F
-from skimage.measure import label, regionprops
-from tqdm.auto import tqdm
+from skimage.measure import regionprops
 
 from utils.inference_core_with_logits import InferenceCoreWithLogits
 from cutie.model.cutie import CUTIE
@@ -35,10 +32,9 @@ __all__ = [
     "MaskPropagation",
 ]
 
+
 class MaskPropagation:
-
-    def __init__(self, sam_checkpoint:str, cutie_yaml:str):
-
+    def __init__(self, sam_checkpoint: str, cutie_yaml: str):
         """
         Initialize the MaskPropagation class.
 
@@ -73,18 +69,18 @@ class MaskPropagation:
             sam_checkpoint=sam_checkpoint,
         )
         args = SimpleNamespace(**args)
-        
+
         if not os.path.isfile(sam_checkpoint):
             download_ckpt(ckpt_path=sam_checkpoint)
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
+
         model = sam_model_registry["vit_b"](args).to(self.device)
         self.sam_predictor = SammedPredictor(model)
 
         with torch.inference_mode():
             config = yaml_to_dotdict(cutie_yaml)
-    
+
             # Load the network weights
             cutie = CUTIE(config).to(self.device).eval()
             if not os.path.isfile(config.weights):
@@ -96,8 +92,7 @@ class MaskPropagation:
         self.vos_processor = InferenceCoreWithLogits(cutie, cfg=config)
         self.trace_num = 4
 
-    def predict(self, img:np.ndarray, initial_mask:np.ndarray, input_z:int):
-
+    def predict(self, img: np.ndarray, initial_mask: np.ndarray, input_z: int):
         """
         Predict the mask propagation.
 
@@ -150,7 +145,7 @@ class MaskPropagation:
             crop_mask = np.array(initial_mask, dtype=int, copy=True)
 
         predict_masks_dict = {}
-        
+
         index_z = input_z
         mask_data = crop_mask
         predict_masks_dict[index_z] = initial_mask
@@ -167,7 +162,9 @@ class MaskPropagation:
             input_tensor=mask_torch, size=self.model_size, mode="nearest"
         )
 
-        init_mask_torch = torch.zeros(self.trace_num, self.model_size, self.model_size).to(self.device)
+        init_mask_torch = torch.zeros(
+            self.trace_num, self.model_size, self.model_size
+        ).to(self.device)
         init_mask_torch[0] = mask_torch[1]
 
         self.vos_processor.clear_memory()
@@ -197,16 +194,20 @@ class MaskPropagation:
                 box,
             )
 
-            predict_masks_dict[index_z] = crop_and_pad_reverse(masks[0],
-                                                                y_min,
-                                                                y_max,
-                                                                x_min,
-                                                                x_max,
-                                                                (padding_left, padding_right, padding_top, padding_bottom), 
-                                                                (size_y, size_x))
+            predict_masks_dict[index_z] = crop_and_pad_reverse(
+                masks[0],
+                y_min,
+                y_max,
+                x_min,
+                x_max,
+                (padding_left, padding_right, padding_top, padding_bottom),
+                (size_y, size_x),
+            )
 
             # reset VOS
-            mask_torch = torch.zeros(self.trace_num, self.model_size, self.model_size).to(self.device)
+            mask_torch = torch.zeros(
+                self.trace_num, self.model_size, self.model_size
+            ).to(self.device)
             resized_masks = F.interpolate(
                 torch.tensor(masks, device=self.device).unsqueeze(0),
                 (self.model_size, self.model_size),
@@ -243,16 +244,20 @@ class MaskPropagation:
                 box,
             )
 
-            predict_masks_dict[index_z] = crop_and_pad_reverse(masks[0],
-                                                                y_min,
-                                                                y_max,
-                                                                x_min,
-                                                                x_max,
-                                                                (padding_left, padding_right, padding_top, padding_bottom), 
-                                                                (size_y, size_x))
+            predict_masks_dict[index_z] = crop_and_pad_reverse(
+                masks[0],
+                y_min,
+                y_max,
+                x_min,
+                x_max,
+                (padding_left, padding_right, padding_top, padding_bottom),
+                (size_y, size_x),
+            )
 
             # reset VOS
-            mask_torch = torch.zeros(self.trace_num, self.model_size, self.model_size).to(self.device)
+            mask_torch = torch.zeros(
+                self.trace_num, self.model_size, self.model_size
+            ).to(self.device)
             resized_masks = F.interpolate(
                 torch.tensor(masks, device=self.device).unsqueeze(0),
                 (self.model_size, self.model_size),
@@ -264,8 +269,7 @@ class MaskPropagation:
 
         return predict_masks_dict
 
-    def predict_by_volume(self, img:np.ndarray, labeled_mask:np.ndarray):
-
+    def predict_by_volume(self, img: np.ndarray, labeled_mask: np.ndarray):
         """
         Predict the mask propagation for a whole volume.
 
@@ -276,18 +280,12 @@ class MaskPropagation:
         Returns:
             numpy.ndarray: Predicted mask for the whole volume.
         """
-        
+
         predict_mask = np.zeros_like(img)
 
-        for z in np.nonzero(labeled_mask.sum((1,2)))[0]:
+        for z in np.nonzero(labeled_mask.sum((1, 2)))[0]:
             result = self.predict(img, labeled_mask[z], z)
             for k, v in result.items():
                 predict_mask[k] = v
-        
+
         return predict_mask
-
-
-
-
-        
-        
