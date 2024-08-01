@@ -283,7 +283,7 @@ def rotate_predict(rot_dict, offset, degree, processor, device):
         rot_dict["mask"] = rotate(rot_dict["mask"], degree)
         rot_dict["point"] = rotate_point(center, rot_dict["point"], angle_rad)
 
-    rot_dict["pred"] = get_side_pred(
+    rot_dict["pred"] += get_side_pred(
         pred=rot_dict["pred"],
         img=rot_dict["img"],
         gt=rot_dict["mask"],
