@@ -54,6 +54,7 @@ class MaskPropagation:
 
         Methods:
             predict(img, initial_mask, input_z): Predict the mask propagation.
+            predict_by_volume(img, initial_mask): Predict the mask propagation with initial 3D mask
         """
 
         if "sam-med2d" in sam_checkpoint:
