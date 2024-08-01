@@ -123,7 +123,7 @@ class XYrollPrediction:
             rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
         if mode in ["clockwise", "both"]:
             offset = 0
-            while offset > -90:
+            while offset >= -90:
                 rot_dict, offset = rotate_predict(
                     rot_dict, offset, -degree, self.vos_processor, device=self.device
                 )
