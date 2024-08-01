@@ -45,7 +45,7 @@ class XYrollPrediction:
         self.vos_processor = InferenceCore(cutie, cfg=config)
         self.trace_num = 4
 
-    def predict(self, img, inital_mask, input_z):
+    def predict(self, img, inital_mask, input_z, dynamic_degree=False):
         """
         Predict the XYroll prediction for a given input image and initial mask.
 
@@ -53,6 +53,7 @@ class XYrollPrediction:
             img (np.ndarray): Input image as a NumPy array.
             inital_mask (np.ndarray): Initial mask as a NumPy array.
             input_z (int): The z-coordinate of the initial mask.
+            dynamic_degree (bool): According to the zx/zy ratio determine the rotation degree dynamicly
 
         Returns:
             np.ndarray: The predicted XYroll prediction as a NumPy array.
@@ -81,7 +82,7 @@ class XYrollPrediction:
         prop = regionprops(mask)[0]
 
         centroid = rescale_centroid(
-            [input_z, prop.centroid[0], prop.centroid[1]],
+            prop.centroid,
             size_z=size_z,
             size_y=size_y,
             size_x=size_x,
@@ -100,7 +101,7 @@ class XYrollPrediction:
 
         rot_dict["pred"] = torch.zeros_like(rot_dict["img"], device=self.device).float()
 
-        degree = determine_degree(size_x=size_x, size_y=size_y, size_z=size_z)
+        degree = determine_degree(size_x=size_x, size_y=size_y, size_z=size_z) if dynamic_degree else 2
         offset = 0
         while offset <= 90:
             rot_dict, offset = rotate_predict(
