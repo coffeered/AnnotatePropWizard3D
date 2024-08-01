@@ -17,7 +17,7 @@ from annotatepropwizard3d.utils.image_process import (
 )
 from annotatepropwizard3d.utils.yaml_loader import yaml_to_dotdict
 
-MAX_LENGTH = 512
+MAX_LENGTH = 480
 
 
 class XYrollPrediction:
