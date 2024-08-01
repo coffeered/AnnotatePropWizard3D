@@ -177,13 +177,14 @@ def visualize_zaxis_rotation(
                 current_img_plane.astype(np.uint8), cv2.COLOR_GRAY2RGB
             )
             current_mask_plane = current_mask[:, int(current_centroid[1])].cpu().numpy()
-            current_mask_plane = morphology.convex_hull_image(current_mask_plane)
             dilated_mask_plane = morphology.dilation(
                 current_mask_plane, morphology.square(4)
             )
             # print(dilated_mask_plane.dtype, current_mask_plane.dtype)
-            dilated_mask_plane = dilated_mask_plane ^ current_mask_plane.astype(bool)
-            current_img_plane_RGB[dilated_mask_plane] = np.array([0, 0, 255])
+            dilated_mask_plane[current_mask_plane.astype(bool)] = 0
+            current_img_plane_RGB[dilated_mask_plane.astype(bool)] = np.array(
+                [0, 0, 255]
+            )
             cv2.imwrite(
                 os.path.join(output_folder, f"{i}_{current_degree:03d}.png"),
                 current_img_plane_RGB,
