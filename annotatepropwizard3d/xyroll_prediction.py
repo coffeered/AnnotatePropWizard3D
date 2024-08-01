@@ -101,7 +101,11 @@ class XYrollPrediction:
 
         rot_dict["pred"] = torch.zeros_like(rot_dict["img"], device=self.device).float()
 
-        degree = determine_degree(size_x=size_x, size_y=size_y, size_z=size_z) if dynamic_degree else 2
+        degree = (
+            determine_degree(size_x=size_x, size_y=size_y, size_z=size_z)
+            if dynamic_degree
+            else 2
+        )
         offset = 0
         while offset <= 90:
             rot_dict, offset = rotate_predict(
@@ -122,7 +126,7 @@ class XYrollPrediction:
         rot_dict["pred"] = interpolate_tensor(
             input_tensor=rot_dict["pred"],
             size=(size_z, size_y, size_x),
-            mode="trilinear",
+            mode="nearest",
         )
 
         return rot_dict["pred"].cpu().numpy()
