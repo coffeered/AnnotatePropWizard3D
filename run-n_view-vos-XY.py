@@ -25,7 +25,13 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MAX_LENGTH = 480
 
 
-def predict_case(folder, vos_processor, dynamic_degree=False):
+def predict_case(folder, vos_processor, dynamic_degree=False, mode="clockwise"):
+
+    if mode not in ["clockwise", "counterclockwise", "both"]:
+        raise ValueError(
+            "Invalid mode. Must be 'clockwise', 'counterclockwise', or 'both'."
+        )
+
     case_tps, case_fns, case_fps = list(), list(), list()
     case_dices, case_size_zs = list(), list()
 
@@ -82,29 +88,27 @@ def predict_case(folder, vos_processor, dynamic_degree=False):
             if dynamic_degree
             else 2
         )
-        offset = 0
-        while offset <= 90:
-            rot_dict, offset = rotate_predict(
-                rot_dict, offset, degree, vos_processor, device=DEVICE
-            )
-        rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
-        offset = 0
-        while offset > -90:
-            rot_dict, offset = rotate_predict(
-                rot_dict, offset, -degree, vos_processor, device=DEVICE
-            )
-        rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
+        if mode in ["counterclockwise", "both"]:
+            offset = 0
+            while offset <= 90:
+                rot_dict, offset = rotate_predict(
+                    rot_dict, offset, degree, vos_processor, device=DEVICE
+                )
+            rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
+        if mode in ["clockwise", "both"]:
+            offset = 0
+            while offset > -90:
+                rot_dict, offset = rotate_predict(
+                    rot_dict, offset, -degree, vos_processor, device=DEVICE
+                )
+            rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
 
-        rot_dict["pred"] = rot_dict["pred"].permute(1, 0, 2).contiguous()
-
-        centroid = centroid[[1, 0, 2]]  # [y, z, x] -> [z, y, x]
-
-        rot_dict["pred"] = interpolate_tensor(
-            input_tensor=rot_dict["pred"],
+        pred_tensor = interpolate_tensor(
+            input_tensor=rot_dict["pred"].permute(1, 0, 2),
             size=(size_z, size_y, size_x),
             mode="nearest",
         )
-        z_pred = (rot_dict["pred"].sum((1, 2)) > 0).int().to(DEVICE)
+        z_pred = (pred_tensor.sum((1, 2)) > 0).int().to(DEVICE)
         z_gt = torch.tensor((mask.sum((1, 2)) > 0), device=DEVICE, dtype=int)
 
         # Calculate true positives, false positives, false negatives and dice score
@@ -151,8 +155,6 @@ def run(dataset: str):
         case_tps, case_fns, case_fps, case_dices, case_size_zs = predict_case(
             folder=case_folder, vos_processor=vos_processor
         )
-
-        print(case_dices)
 
         tps.extend(case_tps)
         fps.extend(case_fps)
