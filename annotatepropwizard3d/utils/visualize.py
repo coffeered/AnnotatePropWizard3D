@@ -8,7 +8,11 @@ from skimage import morphology
 from skimage.measure import label, regionprops
 from torchvision.transforms.functional import rotate
 
-from utils.image_process import interpolate_tensor, normalize_volume, rotate_point
+from annotatepropwizard3d.utils.image_process import (
+    interpolate_tensor,
+    normalize_volume,
+    rotate_point,
+)
 
 __all__ = [
     "visualize",
@@ -89,6 +93,14 @@ def show_box(box, ax):
 
 
 def mask_propagation_visualize(img, predict_masks, output_folder):
+    """
+    Visualize result for these slices has predicted masks
+    Args:
+        img: (np.ndarray) original image
+        predict_masks: (dict<int, np.ndarray>) predicted masks dictionary
+        output_folder: (str) output folder path
+    """
+
     norm_img = normalize_volume(img)
 
     for z, predict_mask in predict_masks.items():
@@ -107,6 +119,16 @@ def mask_propagation_visualize(img, predict_masks, output_folder):
 def visualize_zaxis_rotation(
     img_volume, mask_volume, spacing_yxz, output_folder, device, rotate_degree=3
 ):
+    """
+    Visualize result for xy roll prediction, rotate the image along z axis
+    Args:
+        img_volume: (np.ndarray) original image volume
+        mask_volume: (np.ndarray) original mask volume
+        spacing_yxz: (tuple) spacing in yxz order
+        output_folder: (str) output folder path
+        device: (torch.device) device to use
+        rotate_degree: (int) degree to rotate the image
+    """
     img_volume = img_volume.astype(float)
     norm_volume = normalize_volume(img_volume)
     labeled_mask_volume = label(mask_volume)
@@ -140,7 +162,6 @@ def visualize_zaxis_rotation(
 
         current_degree = 0
         while current_degree < 360:
-            print(current_degree)
             current_volume = rotate(tensor_img, current_degree)
             current_mask = rotate(tensor_mask, current_degree)
             current_centroid = rotate_point(
@@ -151,12 +172,14 @@ def visualize_zaxis_rotation(
             current_img_plane = (
                 current_volume[:, int(current_centroid[1])].cpu().numpy()
             )
+
             current_img_plane_RGB = cv2.cvtColor(
                 current_img_plane.astype(np.uint8), cv2.COLOR_GRAY2RGB
             )
             current_mask_plane = current_mask[:, int(current_centroid[1])].cpu().numpy()
+            current_mask_plane = morphology.convex_hull_image(current_mask_plane)
             dilated_mask_plane = morphology.dilation(
-                morphology.convex_hull_image(current_mask_plane), morphology.square(4)
+                current_mask_plane, morphology.square(4)
             )
             # print(dilated_mask_plane.dtype, current_mask_plane.dtype)
             dilated_mask_plane = dilated_mask_plane ^ current_mask_plane.astype(bool)
