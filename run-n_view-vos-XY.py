@@ -22,10 +22,10 @@ from annotatepropwizard3d.utils.image_process import (
 from annotatepropwizard3d.utils.yaml_loader import yaml_to_dotdict
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MAX_LENGTH = 512
+MAX_LENGTH = 480
 
 
-def predict_case(folder, vos_processor):
+def predict_case(folder, vos_processor, dynamic_degree=False):
     case_tps, case_fns, case_fps = list(), list(), list()
     case_dices, case_size_zs = list(), list()
 
@@ -77,11 +77,21 @@ def predict_case(folder, vos_processor):
 
         rot_dict["pred"] = torch.zeros_like(rot_dict["img"], device=DEVICE).float()
 
-        degree = determine_degree(size_x=size_x, size_y=size_y, size_z=size_z)
+        degree = (
+            determine_degree(size_x=size_x, size_y=size_y, size_z=size_z)
+            if dynamic_degree
+            else 2
+        )
         offset = 0
         while offset <= 90:
             rot_dict, offset = rotate_predict(
                 rot_dict, offset, degree, vos_processor, device=DEVICE
+            )
+        rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
+        offset = 0
+        while offset > -90:
+            rot_dict, offset = rotate_predict(
+                rot_dict, offset, -degree, vos_processor, device=DEVICE
             )
         rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
 
@@ -92,7 +102,7 @@ def predict_case(folder, vos_processor):
         rot_dict["pred"] = interpolate_tensor(
             input_tensor=rot_dict["pred"],
             size=(size_z, size_y, size_x),
-            mode="trilinear",
+            mode="nearest",
         )
         z_pred = (rot_dict["pred"].sum((1, 2)) > 0).int().to(DEVICE)
         z_gt = torch.tensor((mask.sum((1, 2)) > 0), device=DEVICE, dtype=int)
