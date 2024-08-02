@@ -29,3 +29,32 @@ Load your 3D volume data into the application.
 Annotate a slice using the 2D annotation tools provided.
 Propagate annotations through the 3D volume using the propagation feature.
 Review and refine the propagated annotations as needed.
+
+### MaskPropagation
+```python
+from annotatepropwizard3d.mask_propagation import MaskPropagation
+
+model = MaskPropagation("{sam weight path}", "{cutie yaml path}")
+
+# 3d numpy array from nii
+# 3d numpy array from labeled mask
+with torch.inference_mode():
+    result = model.predict_by_volume({3d numpy array}, {3d numpy array})
+
+# result is a 3d numpy array
+```
+
+### XYrollPrediction
+```python
+from annotatepropwizard3d.xyroll_prediction import XYrollPrediction
+
+model = XYrollPrediction("{cutie yaml path}")
+
+# 3d numpy array from nii
+# 2d numpy array from target labeled slice
+# int k for target slice index
+with torch.inference_mode():
+    result = model.predict({3d numpy array}, {2d numpy array}, {int k}})
+
+# result is a 3d numpy array
+```
