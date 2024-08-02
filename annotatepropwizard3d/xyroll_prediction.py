@@ -87,17 +87,9 @@ class XYrollPrediction:
             1, 0, 2
         ).contiguous()  # [z, y, x] -> [y, z, x]
 
-        prop = regionprops(mask)[0]
+        prop = regionprops(tensor_mask.int().cpu().numpy())[0]
 
-        centroid = rescale_centroid(
-            prop.centroid,
-            size_z=size_z,
-            size_y=size_y,
-            size_x=size_x,
-            max_length=MAX_LENGTH,
-        )
-
-        centroid = centroid[[1, 0, 2]]
+        centroid = np.array(prop.centroid)
 
         rot_dict = {
             "img": tensor_img,
