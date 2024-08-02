@@ -17,7 +17,7 @@ from annotatepropwizard3d.utils.image_process import (
 )
 from annotatepropwizard3d.utils.yaml_loader import yaml_to_dotdict
 
-MAX_LENGTH = 512
+MAX_LENGTH = 480
 
 
 class XYrollPrediction:
@@ -45,7 +45,9 @@ class XYrollPrediction:
         self.vos_processor = InferenceCore(cutie, cfg=config)
         self.trace_num = 4
 
-    def predict(self, img, inital_mask, input_z):
+    def predict(
+        self, img, inital_mask, input_z, dynamic_degree=False, mode="clockwise"
+    ):
         """
         Predict the XYroll prediction for a given input image and initial mask.
 
@@ -53,10 +55,17 @@ class XYrollPrediction:
             img (np.ndarray): Input image as a NumPy array.
             inital_mask (np.ndarray): Initial mask as a NumPy array.
             input_z (int): The z-coordinate of the initial mask.
+            dynamic_degree (bool): According to the zx/zy ratio determine the rotation degree dynamicly
+            mode (str): The mode for rotation prediction, can be 'clockwise', 'counterclockwise', or 'both'
 
         Returns:
             np.ndarray: The predicted XYroll prediction as a NumPy array.
         """
+
+        if mode not in ["clockwise", "counterclockwise", "both"]:
+            raise ValueError(
+                "Invalid mode. Must be 'clockwise', 'counterclockwise', or 'both'."
+            )
 
         img = normalize_volume(img.astype(float))
         size_z, size_y, size_x = img.shape
@@ -81,7 +90,7 @@ class XYrollPrediction:
         prop = regionprops(mask)[0]
 
         centroid = rescale_centroid(
-            [input_z, prop.centroid[0], prop.centroid[1]],
+            prop.centroid,
             size_z=size_z,
             size_y=size_y,
             size_x=size_x,
@@ -100,28 +109,30 @@ class XYrollPrediction:
 
         rot_dict["pred"] = torch.zeros_like(rot_dict["img"], device=self.device).float()
 
-        degree = determine_degree(size_x=size_x, size_y=size_y, size_z=size_z)
-        offset = 0
-        while offset <= 90:
-            rot_dict, offset = rotate_predict(
-                rot_dict, offset, degree, self.vos_processor, device=self.device
-            )
-        rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
-        offset = 0
-        while offset > -90:
-            rot_dict, offset = rotate_predict(
-                rot_dict, offset, -degree, self.vos_processor, device=self.device
-            )
-        rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
+        degree = (
+            determine_degree(size_x=size_x, size_y=size_y, size_z=size_z)
+            if dynamic_degree
+            else 2
+        )
+        if mode in ["counterclockwise", "both"]:
+            offset = 0
+            while offset <= 90:
+                rot_dict, offset = rotate_predict(
+                    rot_dict, offset, degree, self.vos_processor, device=self.device
+                )
+            rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
+        if mode in ["clockwise", "both"]:
+            offset = 0
+            while offset >= -90:
+                rot_dict, offset = rotate_predict(
+                    rot_dict, offset, -degree, self.vos_processor, device=self.device
+                )
+            rot_dict = reset_rotate(rot_dict, centroid=centroid, offset=offset)
 
-        rot_dict["pred"] = rot_dict["pred"].permute(1, 0, 2).contiguous()
-
-        centroid = centroid[[1, 0, 2]]  # [y, z, x] -> [z, y, x]
-
-        rot_dict["pred"] = interpolate_tensor(
-            input_tensor=rot_dict["pred"],
+        pred_tensor = interpolate_tensor(
+            input_tensor=rot_dict["pred"].permute(1, 0, 2),
             size=(size_z, size_y, size_x),
-            mode="trilinear",
+            mode="nearest",
         )
 
-        return rot_dict["pred"].cpu().numpy()
+        return (pred_tensor.sum((1, 2)) > 0).cpu().numpy()
